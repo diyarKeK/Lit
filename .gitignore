@@ -1,0 +1,15 @@
+__pycahe__/
+*.pyc
+*.tmp
+*.log
+
+build/
+dist/
+
+hello.lit
+LitDoc.txt
+
+temp/
+.vscode/
+.idea/
+*.swp
