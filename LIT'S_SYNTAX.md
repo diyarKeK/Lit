@@ -324,11 +324,11 @@
 В функциях где нужно возвращать:
 
     fun main() {
-        int id = getIdByCase('Alex')
+        int:u64 id = getIdByCase('Alex')
         print(id)
     }
     
-    fun getIdByCase(str name): int:8 {
+    fun getIdByCase(str name): int:u64 {
         return switch name {
             case 'David' => 1
             case 'Alex' => 2
