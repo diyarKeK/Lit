@@ -1,354 +1,225 @@
-import sys
 import os
+import sys
 import subprocess
 import re
 import random
 
-
-# TO-DO:
-# Оптимизация компилятора (litc.py) построение в архитектуру
-# Вывод ошибок самим компилятором для .lit файлов - Syntax_Error пока что
-
-
-def compile_lit_to_c(lit_path, output_c_path):
-    with open(lit_path, "r", encoding="utf-8") as f:
+def compile_lit_to_cpp(lit_path, cpp_path):
+    with open(lit_path, 'r', encoding='utf-8') as f:
         code = f.read()
 
     code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
 
     lines = code.splitlines()
 
-    c_code = [
-        '#include <stdio.h>',
-        '#include <stdlib.h>',
-        '#include <stdint.h>',
-        '#include <string.h>',
+    cpp_code = [
+        '#include <iostream>',
+        '#include <string>',
+        'using namespace std;\n',
         'int main() {'
     ]
 
+    inside_main = False
     variables = {}
-    tmp_print_counter = 0
 
     for line in lines:
         line = re.sub(r'//.*', '', line).strip()
 
-        if not line:
+        if line.startswith('fun main()'):
+            inside_main = True
+            continue
+        if inside_main and line == '}':
+            inside_main = False
             continue
 
-        if line.startswith(("int", "float", "bool", "str")):
+        if inside_main:
 
-            header, *rest = line.split()
-            if ':' in header:
-                base_type, sub_type = header.split(':')
-            else:
-                base_type = header
-                sub_type = None
+            if re.match(r"^(int|float|bool|str)(:[\w\d]+)?\s+\w+\s*=\s*.+", line):
 
-            if len(rest) >= 3 and rest[1] == "=":
-                var_name = rest[0]
-                var_value = " ".join(rest[2:])
-                var_value = clean_number_literals(var_value)
-                c_type = None
+                match = re.match(r"^(int|float|bool|str)(:[\w\d]+)?\s+(\w+)\s*=\s*(.+)", line)
 
-                if base_type == "int":
-                    c_type = {
-                        None: "int",
-                        "i8": "int8_t",
-                        "i16": "int16_t",
-                        "i32": "int32_t",
-                        "i64": "int64_t",
-                        "u8": "uint8_t",
-                        "u16": "uint16_t",
-                        "u32": "uint32_t",
-                        "u64": "uint64_t"
-                    }.get(sub_type, "int")
-                elif base_type == "float":
-                    c_type = {
-                        None: "float",
-                        "f32": "float",
-                        "f64": "double"
-                    }.get(sub_type, "float")
-                elif base_type == "bool":
-                    c_type = "bool"
-                    if var_value == "true":
-                        var_value = "1"
-                    elif var_value == "false":
-                        var_value = "0"
-                elif base_type == "str":
-                    c_type = "char*"
-                    if var_value.startswith("'") and var_value.endswith("'") and not var_value.__contains__('+'):
-                        var_value = '"' + var_value[1:-1].replace('"', '\\"') + '"'
-                        c_code.append(f'    {c_type} {var_name} = {var_value};')
-                        variables[var_name] = base_type
-                        continue
+                base_type = match.group(1)
+                sub_type = match.group(2)[1:] if match.group(2) else None
+                var_name = match.group(3)
+                var_value = match.group(4).strip()
+
+                if base_type == 'int' and sub_type and '#include <cstdint>' not in cpp_code:
+                    cpp_code.insert(2, '#include <cstdint>')
+                elif base_type == 'float' and sub_type and '#include <iomanip>' not in cpp_code:
+                    cpp_code.insert(2, '#include <iomanip>')
+
+                variables[var_name] = base_type if not sub_type else f'{base_type}:{sub_type}'
+
+                if base_type == 'int':
+                    type_map = {
+                        None: 'int',
+                        'i8': 'int8_t',
+                        'i16': 'int16_t',
+                        'i32': 'int32_t',
+                        'i64': 'int64_t',
+                        'u8': 'uint8_t',
+                        'u16': 'uint16_t',
+                        'u32': 'uint32_t',
+                        'u64': 'uint64_t'
+                    }
+                    cpp_type = type_map.get(sub_type, 'int')
+                    cpp_code.append(f'    {cpp_type} {var_name} = {var_value};')
+                elif base_type == 'float':
+                    if not  var_value.endswith('f'):
+                        var_value += 'f'
+
+                    type_map = {
+                        None: 'float',
+                        'f32': 'float',
+                        'f64': 'double'
+                    }
+
+                    cpp_type = type_map.get(sub_type, 'float')
+                    cpp_code.append(f'    {cpp_type} {var_name} = {var_value};')
+                elif base_type == 'bool':
+                    if var_value.lower() == 'true':
+                        var_value = 'true'
+                    elif var_value.lower() == 'false':
+                        var_value = 'false'
+                    cpp_code.append(f'    bool {var_name} = {var_value};')
+                elif base_type == 'str':
+                    if var_value.startswith("'") and var_value.endswith("'"):
+                        text = var_value[1:-1].replace('"', '\\"').replace("\\'", "'")
+
+                        if re.search(r'hello', text, re.IGNORECASE) and re.search(r'world', text, re.IGNORECASE):
+                            text = random.choice([
+                                text,
+                                'Hello World is not enabled in Lit! :)'
+                            ])
+
+                        var_value = f'"{text}"'
+                    cpp_code.append(f'    string {var_name} = {var_value};')
+
+            elif line.startswith('print(') and line.endswith(')'):
+                args = line[6:-1].strip()
+
+                match = re.match(r"(.+?)(?:,\s*end\s*=\s*'(.*?)')?$", args)
+
+                if match:
+                    expr = match.group(1).strip()
+                    end = match.group(2) if match.group(2) is not None else "\\n"
+
+                    if expr.startswith("'") and expr.endswith("'"):
+                        text = expr[1:-1].replace('"', '\\"').replace("\\'", "'")
+
+                        if '{' in text:
+                            cpp_code.append(f'    cout << {interpolate_string(text, variables)} << "{end}";')
+
+                        else:
+                            if re.search(r'hello', text, re.IGNORECASE) and re.search(r'world', text, re.IGNORECASE):
+                                text = random.choice([
+                                    text,
+                                    'Hello World is not enabled in Lit! :)'
+                                ])
+
+                            cpp_code.append(f'    cout << "{text}" << "{end}";')
+
+                    elif expr in variables:
+                        var_type = variables[expr]
+                        if var_type == 'bool':
+                            cpp_code.append(f'    cout << ({expr} ? "true" : "false") << "{end}";')
+                        elif var_type.startswith('int'):
+                            if var_type.endswith('i8') or var_type.endswith('u8'):
+                                cpp_code.append(f'    cout << (int){expr} << "{end}";')
+                            else:
+                                cpp_code.append(f'    cout << {expr} << "{end}";')
+                        elif var_type.startswith('float'):
+                            if var_type.endswith('f64'):
+                                cpp_code.append(f'    cout << fixed << setprecision(12) << {expr} << "{end}";')
+                            elif var_type.endswith('f32'):
+                                cpp_code.append(f'    cout << fixed << setprecision(6) << {expr} << "{end}";')
+                            else:
+                                cpp_code.append(f'    cout << std::to_string({expr}) << "{end}";')
+                        elif var_type == 'str':
+                            cpp_code.append(f'    cout << {expr} << "{end}";')
+
+                elif args in variables:
+                    var_type = variables[args]
+                    if var_type == 'bool':
+                        cpp_code.append(f'    cout << ({args} ? "true" : "false") << "\\n";')
                     else:
-                        express_str(c_code, variables, base_type, var_name, var_value)
-                        continue
+                        cpp_code.append(f'    cout << {args} << "\\n";')
 
-                if c_type == "float" and not var_value.endswith("f"):
-                    var_value += "f"
+    cpp_code.append('    return 0;')
+    cpp_code.append('}')
 
-                c_code.append(f'    {c_type} {var_name} = {var_value};')
-                variables[var_name] = base_type if sub_type is None else f"{base_type}:{sub_type}"
-            continue
-
-        elif line.startswith("print(") and line.endswith(")"):
-            inner = line[6:-1].strip()
-
-            if inner == "":
-                c_code.append('    printf("\\n");')
-                continue
-
-            if inner.startswith("'") and inner.endswith("'"):
-                content = inner[1:-1].strip()
-
-                if re.search(r'hello', content, re.IGNORECASE) and re.search(r'world', content, re.IGNORECASE):
-                    content = random.choice([
-                        content,
-                        "Hello World is not enabled in Lit! :)"
-                    ])
-
-                text = content.replace('"', '\\"').replace("\\'", "'")
-                c_code.append(f'    printf("{text}\\n");')
-                continue
-
-            if is_string_expression(inner, variables):
-                tmp_var = f"__tmp_print_{tmp_print_counter}"
-                tmp_print_counter += 1
-                generate_str_concat(c_code, variables, tmp_var, inner)
-                c_code.append(f'    printf("%s\\n", {tmp_var});')
-                continue
-
-            if inner == "true":
-                c_code.append(f'    printf("true\\n");')
-
-            elif inner == "false":
-                c_code.append(f'    printf("false\\n");')
+    os.makedirs(os.path.dirname(cpp_path), exist_ok=True)
+    with open(cpp_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(cpp_code))
 
 
-            elif re.match(r'^\d+$', inner):
-                c_code.append(f'    printf("%d\\n", {inner});')
-
-            elif re.match(r'^\d+\.\d*$', inner):
-                c_code.append(f'    printf("%f\\n", {inner});')
-
-
-            elif inner in variables:
-                var_type = variables[inner]
-
-                if var_type.startswith('int'):
-                    if ':i64' in var_type or ':u32' in var_type or ':u64' in var_type:
-                        c_code.insert(4, '#include <inttypes.h>')
-                        if ':i64' in var_type:
-                            c_code.append(f'    printf("%" PRId64 "\\n", {inner});')
-                        elif ':u32' in var_type:
-                            c_code.append(f'    printf("%" PRIu32 "\\n", {inner});')
-                        elif ':u64' in var_type:
-                            c_code.append(f'    printf("%" PRIu64 "\\n", {inner});')
-                    else:
-                        c_code.append(f'    printf("%d\\n", {inner});')
-                elif var_type.startswith('float'):
-                    if ':f64' in var_type:
-                        c_code.append(f'    printf("%.12f\\n", {inner});')
-                    else:
-                        c_code.append(f'    printf("%f\\n", {inner});')
-                elif var_type == 'bool':
-                    c_code.append(f'    printf("%s\\n", {inner} ? "true" : "false");')
-                elif var_type == 'str':
-                    c_code.append(f'    printf("%s\\n", {inner});')
-                else:
-                    c_code.append('    printf("unknown type\\n");')
-
-            else:
-                if re.search(r'\d+\.\d*', inner) or any(var in inner for var in variables if variables[var] == "float"):
-                    c_code.append(f'    printf("%f\\n", (float)({inner}));')
-                else:
-                    c_code.append(f'    printf("%d\\n", ({inner}));')
-
-    c_code.append('    return 0;')
-    c_code.append('}')
-
-    os.makedirs(os.path.dirname(output_c_path), exist_ok=True)
-    with open(output_c_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(c_code))
-
-
-
-
-def split_concat_expr(expr):
-    parts = []
-    current = ''
-    depth = 0
-
+def interpolate_string(template, variables):
+    result = []
+    buffer = ''
     i = 0
-    while i < len(expr):
-        ch = expr[i]
 
-        if ch == '(':
-            if depth == 0 and current.strip():
-                parts.append(current.strip())
-                current = ''
-            depth += 1
-            current += ch
-        elif ch == ')':
-            depth -= 1
-            current += ch
-            if depth == 0:
-                parts.append(current.strip())
-                current = ''
-        elif ch == '+' and depth == 0:
-            if current.strip():
-                parts.append(current.strip())
-                current = ''
-        else:
-            current += ch
-        i += 1
-
-    if current.strip():
-        parts.append(current.strip())
-
-    return parts
-
-
-
-
-def estimate_str_length(expr, variables):
-    parts = split_concat_expr(expr)
-    total = 0
-
-    for part in parts:
-        part = part.strip()
-        if part.startswith("'") and part.endswith("'"):
-            total += len(part[1:-1])
-        elif part == "true":
-            total += 4
-        elif part == "false":
-            total += 5
-        elif re.match(r'^\d+\.\d*$', part):
-            total += 16
-        elif re.match(r'^\d+$', part):
-            total += 12
-        elif part in variables:
-            var_type = variables[part]
-            if var_type == "str":
-                total += 64
-            elif var_type == "int":
-                total += 12
-            elif var_type == "float":
-                total += 24
-            elif var_type == "bool":
-                total += 5
-        elif part.startswith("(") and part.endswith(")"):
-            total += estimate_str_length(part[1:-1], variables)
-        else:
-            total += 16  # fallback
-    return total
-
-
-
-
-def generate_str_concat(c_code, variables, var_name, expr, is_top_level=True):
-    parts = split_concat_expr(expr)
-
-    if is_top_level:
-        est_len = estimate_str_length(expr, variables)
-        c_code.append(f'    int __len_{var_name} = {est_len} + 1;')
-        c_code.append(f'    char* {var_name} = malloc(__len_{var_name});')
-        c_code.append(f'    {var_name}[0] = \'\\0\';')
-
-    for part in parts:
-        if part.startswith("'") and part.endswith("'"):
-            val = '"' + part[1:-1].replace('"', '\\"') + '"'
-            c_code.append(f'    strcat({var_name}, {val});')
-        elif part.startswith('(') and part.endswith(')'):
-            inner_expr = part[1:-1].strip()
-            if is_string_expression(inner_expr, variables):
-                generate_str_concat(c_code, variables, var_name, inner_expr, is_top_level=False)
+    while i < len(template):
+        if template[i:i+2] == '{{':
+            buffer += '{'
+            i += 2
+        elif template[i:i+2] == '}}':
+            buffer += '}'
+            i += 2
+        elif template[i] == '{':
+            if buffer:
+                result.append(f'"{buffer}"')
+                buffer = ''
+            j = i + 1
+            while j < len(template) and template[j] != '}':
+                j += 1
+            expr = template[i+1:j].strip()
+            if not expr:
+                pass
+            elif expr in variables and variables[expr] == 'bool':
+                result.append(f'({expr} ? "true" : "false")')
+            elif expr == 'true':
+                result.append('"true"')
+            elif expr == 'false':
+                result.append('"false"')
             else:
-                if re.search(r'\d+\.\d*', inner_expr):
-                    c_code.append(f'    {{ char buf[32]; sprintf(buf, "%g", (double)({inner_expr})); strcat({var_name}, buf); }}')
-                else:
-                    c_code.append(f'    {{ char buf[32]; sprintf(buf, "%d", (int)({inner_expr})); strcat({var_name}, buf); }}')
-            continue
-        elif part == "true":
-            c_code.append(f'    strcat({var_name}, "true");')
-        elif part == "false":
-            c_code.append(f'    strcat({var_name}, "false");')
-        elif re.search('[0-9]+.', part):
-            c_code.append(f'    {{ char buf[32]; sprintf(buf, "%g", (double)({part})); strcat({var_name}, buf); }}')
-        elif re.search('[0-9]+', part):
-            c_code.append(f'    {{ char buf[32]; sprintf(buf, "%d", (int)({part})); strcat({var_name}, buf); }}')
-        elif part in variables:
-            if variables[part] == "str":
-                c_code.append(f'    strcat({var_name}, {part});')
-            elif variables[part].startswith("int"):
-                c_code.append(f'    {{ char buf[32]; sprintf(buf, "%d", {part}); strcat({var_name}, buf); }}')
-            elif variables[part].startswith("float"):
-                c_code.append(f'    {{ char buf[32]; sprintf(buf, "%f", {part}); strcat({var_name}, buf); }}')
-            elif variables[part] == "bool":
-                c_code.append(f'    {{ char buf[32]; sprintf(buf, "%s", {part} ? "true" : "false"); strcat({var_name}, buf); }}')
+                result.append(f'{expr}')
+            i = j + 1
+        else:
+            buffer += template[i]
+            i += 1
+    if buffer:
+        result.append(f'"{buffer}"')
+    for res in result:
+        if res is None:
+            res = '""'
+    return ' << '.join(result)
 
-
-
-
-def express_str(c_code, variables, base_type, var_name, var_value):
-    generate_str_concat(c_code, variables, var_name, var_value)
-    variables[var_name] = base_type
-
-
-
-
-def is_string_expression(expr, variables):
-    parts = split_concat_expr(expr)
-    for part in parts:
-        part = part.strip()
-        if part.startswith("'") and part.endswith("'"):
-            return True
-        if part in variables and variables[part] == "str":
-            return True
-        if part.startswith("(") and part.endswith(")"):
-            if is_string_expression(part[1:-1], variables):
-                return True
-
-    return False
-
-
-
-
-def clean_number_literals(expr):
-    return re.sub(r'(?<=\d)_(?=\d)', '', expr)
-
-
-
-
-def compile_c_to_exe(c_path, exe_path):
-    result = subprocess.run(["gcc", c_path, "-o", exe_path])
+def compile_cpp_to_exe(cpp_path, exe_path):
+    result = subprocess.run(['g++', cpp_path, '-o', exe_path])
     if result.returncode != 0:
-        print("Error Of Compilation C Code")
+        print("Error Of Compilation")
         sys.exit(1)
     else:
         print(f"Compiled to: {exe_path}")
 
 
-
-
 def main():
     if len(sys.argv) != 2:
-        print("Use: python litc.py path/to/file.lit")
+        print("InValid, Use: python litc.py file.lit")
         return
 
     lit_path = sys.argv[1]
-    if not lit_path.endswith(".lit"):
+    if not lit_path.endswith('.lit'):
         print("Not .lit file")
         return
 
     base_name = os.path.splitext(os.path.basename(lit_path))[0]
     build_dir = "build"
-    c_path = os.path.join(build_dir, base_name + ".c")
+    cpp_path = os.path.join(build_dir, base_name + ".cpp")
     exe_path = os.path.join(build_dir, base_name + ".exe")
 
-    compile_lit_to_c(lit_path, c_path)
-    compile_c_to_exe(c_path, exe_path)
+    compile_lit_to_cpp(lit_path, cpp_path)
+    compile_cpp_to_exe(cpp_path, exe_path)
 
 if __name__ == "__main__":
     main()
