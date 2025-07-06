@@ -48,7 +48,7 @@ Lit Programming Language Repository
           /* MultiLine
               Comment */
       }
-- Incrementing numbers (`+=, -=, *=, /=, %=, ++, --`):
+- Incrementing numbers `+=, -=, *=, /=, %=, ++, --`:
 
       fun main() {
           int a = 10
