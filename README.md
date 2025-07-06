@@ -48,3 +48,17 @@ Lit Programming Language Repository
           /* MultiLine
               Comment */
       }
+- Incrementing numbers:
+
+      fun main() {
+          int a = 10
+          a += 5
+          a -= 1
+          a *= 2
+          a /= 2
+          a %= 3 // %= is unaccessible for float
+          a++
+          a--
+          
+          print(a) // 2
+      }
