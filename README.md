@@ -62,3 +62,9 @@ Lit Programming Language Repository
           
           print(a) // 2
       }
+- Underscoring big numbers:
+
+      fun main() {
+          int i = 2_147_483_647
+          print(i)
+      }
