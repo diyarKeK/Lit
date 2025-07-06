@@ -48,13 +48,16 @@ def main():
 #           str braces = '{{ and }}'
 #           print(braces)
 #       }
-# 2. Встроенная запуск ошибок по типу:
+# 2. Добавить конкатенацию строк: str s = 'Hello' + name + '!'
+# 3. Добавить поддержку "" и `` для литеральных строк, 
+# где `` это как в Java: """ """
+# 4. Встроенная запуск ошибок по типу:
 #       fun main() {
 #           int a = '' // Error at *.lit:2: Integer type value cannot be literal string
 #           print(g) // Error at *.lit:3: Unknown variable
 #       }
-# 3. Выделение памяти: u8, i8, u16, i16 ... f32, f64
-# 4. if-else с операторами: and, or, not, ==, >, <, >=, <=, !=
+# 5. Выделение памяти: u8, i8, u16, i16 ... f32, f64
+# 6. if-else с операторами: and, or, not, ==, >, <, >=, <=, !=
 
 if __name__ == "__main__":
     main()
