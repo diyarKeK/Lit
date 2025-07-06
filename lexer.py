@@ -58,11 +58,14 @@ def tokenize(code: str):
 
             if match:
                 text = match.group(0)
-                if tok_type != 'SKIP' and tok_type != 'NEW_LINE':
+
+                if tok_type == 'UNKNOWN':
+                    unknown_statements_count += 1
+                    tokens.append(Token(tok_type, text))
+                    print(f'Token({tok_type}) = {text} <- IS UNKNOWN')
+                elif tok_type != 'SKIP' and tok_type != 'NEW_LINE':
                     tokens.append(Token(tok_type, text))
                     print(f'Token({tok_type}) = {text}')
-                elif tok_type == 'UNKNOWN':
-                    unknown_statements_count += 1
 
                 i += len(text)
                 break

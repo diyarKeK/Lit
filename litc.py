@@ -3,7 +3,7 @@ import sys
 import subprocess
 from generator import generate_cpp
 from lexer import tokenize
-from optimizator import optimize
+from optimizer import optimize
 from parser import Parser
 
 def compile_cpp_to_exe(cpp_path, exe_path):
