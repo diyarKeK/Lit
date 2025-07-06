@@ -1,6 +1,7 @@
 from typing import Union
 
-from nodes import Program, Main_Function, PrintNode, VarDeclarationNode, VarReferenceNode, ExpressionNode
+from nodes import Program, Main_Function, PrintNode, VarDeclarationNode, VarReferenceNode, ExpressionNode, \
+    AssignmentNode, AugmentedAssignmentNode, IncrementNode
 import re
 import random
 
@@ -35,6 +36,25 @@ def generate_cpp(ast: Program):
                     else:
                         val = cpp_literal(stmt.value)
                         lines.append(f'    {var_type} {stmt.name} = {val};')
+
+                elif isinstance(stmt, AssignmentNode):
+                    code = f'{stmt.name} = {merge_parts(stmt.value, variables, for_string=(variables.get(stmt.name) == 'str'))};'
+                    lines.append(f'    {code}')
+
+                elif isinstance(stmt, AugmentedAssignmentNode):
+                    if stmt.name not in variables:
+                        raise Exception(f'Variable {stmt.name} not declared')
+
+                    var_type = variables[stmt.name]
+
+                    if stmt.operator == '%' and var_type == 'float':
+                        raise Exception(f"Cannot use '%' for float var '{stmt.name}'")
+
+                    expr = generate_expr(stmt.value, variables)
+                    lines.append(f'    {stmt.name} {stmt.operator}= {expr};')
+
+                elif isinstance(stmt, IncrementNode):
+                    lines.append(f'    {stmt.name}{stmt.operator};')
 
                 elif isinstance(stmt, PrintNode):
                     output = '    cout << '

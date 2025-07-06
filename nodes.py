@@ -17,6 +17,23 @@ class VarDeclarationNode:
     value: Union[str, int, float, bool, List[Union[str, 'VarReferenceNode']]]
 
 @dataclass
+class AssignmentNode:
+    name: str
+    value: Union[str, int, float, bool, 'VarReferenceNode', 'ExpressionNode', List]
+
+
+@dataclass
+class AugmentedAssignmentNode:
+    name: str
+    operator: str
+    value: Union[int, float, 'VarReferenceNode', 'ExpressionNode']
+
+@dataclass
+class IncrementNode:
+    name: str
+    operator: str
+
+@dataclass
 class ExpressionNode:
     left: Union['ExpressionNode', 'VarReferenceNode', int, float]
     operator: str

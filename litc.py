@@ -42,5 +42,14 @@ def main():
 
     compile_cpp_to_exe(cpp_path, exe_path)
 
+# TO-DO
+# 1. Встроенная запуск ошибок по типу:
+#       fun main() {
+#           int a = '' // Error at *.lit:2: Integer type value cannot be literal string
+#           print(g) // Error at *.lit:3: Unknown variable
+#       }
+# 2. Выделение памяти: u8, i8, u16, i16 ... f32, f64
+# 3. if-else с операторами: and, or, not, ==, >, <, >=, <=, !=
+
 if __name__ == "__main__":
     main()

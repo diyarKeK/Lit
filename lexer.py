@@ -19,6 +19,13 @@ TOKEN_TYPES = [
     ('STR', r'\bstr\b'),
 
     ('ASSIGNMENT', r'='),
+    ('PLUS_ASSIGNMENT', r'\+='),
+    ('MINUS_ASSIGNMENT', r'-='),
+    ('MULTIPLY_ASSIGNMENT', r'\*='),
+    ('DIVIDE_ASSIGNMENT', r'/='),
+    ('MODULO_ASSIGNMENT', r'%='),
+    ('INCREMENT', r'\+\+'),
+    ('DECREASE', r'--'),
 
     ('LITERAL_FLOAT', r'\d+\.\d+'),
     ('LITERAL_INT', r'\d+'),

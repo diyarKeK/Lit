@@ -34,6 +34,8 @@ class Parser:
                 body.append(self.parse_var_declaration())
             elif self.current().type == 'PRINT':
                 body.append(self.parse_print())
+            elif self.current().type == 'IDENTIFIER':
+                body.append(self.parse_assignment_or_expression())
             else:
                 raise SyntaxError(f'Unexpected Token: {self.current()}')
 
@@ -78,7 +80,7 @@ class Parser:
             value = self.parse_interpolated_string(raw)
 
         elif token == 'IDENTIFIER':
-            value = VarReferenceNode(self.eat('IDENTIFIER').value)
+            value = self.parse_expression()
 
         else:
             value = self.parse_expression()
@@ -174,3 +176,61 @@ class Parser:
             parts.append(text[cursor:])
 
         return parts
+
+    def parse_assignment_or_expression(self):
+        name = self.eat('IDENTIFIER').value
+        current_type = self.current().type
+
+        if current_type == 'ASSIGNMENT':
+            self.eat('ASSIGNMENT')
+
+            token = self.current().type
+            if token == 'LITERAL_STRING':
+                raw = self.eat('LITERAL_STRING').value[1:-1].replace('"', '\\"').replace("\\'", "'")
+                value = self.parse_interpolated_string(raw)
+            elif token in ('LITERAL_INT', 'LITERAL_FLOAT', 'TRUE', 'FALSE'):
+                value = self.eat(token).value
+                if isinstance(value, str):
+                    value = int(value) if '.' not in value else float(value)
+                if token == 'TRUE': value = True
+                if token == 'FALSE': value = False
+            else:
+                value = self.parse_expression()
+
+            return AssignmentNode(name=name, value=value)
+
+        elif current_type == 'PLUS_ASSIGNMENT':
+            self.eat('PLUS_ASSIGNMENT')
+            value = self.parse_expression()
+            return AugmentedAssignmentNode(name=name, operator='+', value=value)
+
+        elif current_type == 'MINUS_ASSIGNMENT':
+            self.eat('MINUS_ASSIGNMENT')
+            value = self.parse_expression()
+            return AugmentedAssignmentNode(name=name, operator='-', value=value)
+
+        elif current_type == 'MULTIPLY_ASSIGNMENT':
+            self.eat('MULTIPLY_ASSIGNMENT')
+            value = self.parse_expression()
+            return AugmentedAssignmentNode(name=name, operator='*', value=value)
+
+        elif current_type == 'DIVIDE_ASSIGNMENT':
+            self.eat('DIVIDE_ASSIGNMENT')
+            value = self.parse_expression()
+            return AugmentedAssignmentNode(name=name, operator='/', value=value)
+
+        elif current_type == 'MODULO_ASSIGNMENT':
+            self.eat('MODULO_ASSIGNMENT')
+            value = self.parse_expression()
+            return AugmentedAssignmentNode(name=name, operator='%', value=value)
+
+        elif current_type == 'INCREMENT':
+            self.eat('INCREMENT')
+            return IncrementNode(name=name, operator='++')
+
+        elif current_type == 'DECREASE':
+            self.eat('DECREASE')
+            return IncrementNode(name=name, operator='--')
+
+        else:
+            raise SyntaxError(f'Unknown assignment or expression for {name}')
