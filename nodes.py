@@ -15,6 +15,7 @@ class VarDeclarationNode:
     var_type: str
     name: str
     value: Union[str, int, float, bool, List[Union[str, 'VarReferenceNode']]]
+    suffix: str = None
 
 @dataclass
 class AssignmentNode:

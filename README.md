@@ -38,6 +38,13 @@ Lit Programming Language Repository
           str s = 'We have {quantity} apples'
           print(s)
       }
+- Concatenation strings:
+
+      fun main() {
+          str name = 'Steve'
+          str greet = 'Hello, ' + name + '!'
+          print(greet)
+      }
 - Comments by `//` and MultiLine Comments with `/* */`:
 
       fun main() {
@@ -67,4 +74,20 @@ Lit Programming Language Repository
       fun main() {
           int i = 2_147_483_647
           print(i)
+      }
+- Memory allocation for int and float variables:
+
+      fun main() {
+          int:i8 a = -128
+          int:i16 b = -32768
+          int:i32 c = -2_147_483_648
+          int:i64 d = -9_223_372_036_854_775_808
+          
+          int:u8 e = 255
+          int:u16 f = 65535
+          int:u32 g = 4_294_967_295
+          int:u64 h = 18_446_744_073_709_551_615
+          
+          float:f32 i = 3.141592
+          float:f64 j = 3.141592653589
       }

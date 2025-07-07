@@ -4,9 +4,10 @@ from lexer import tokenize
 from nodes import *
 
 class Parser:
-    def __init__(self, tokens):
+    def __init__(self, tokens, file_name):
         self.tokens = tokens
         self.pos = 0
+        self.file_name = file_name
 
     def current(self):
         if self.pos < len(self.tokens):
@@ -18,7 +19,10 @@ class Parser:
         if token and token.type == expected_type:
             self.pos += 1
             return token
-        raise SyntaxError(f'Expected {expected_type}, got {token}')
+        elif token:
+            raise SyntaxError(f'{self.file_name}:{token.line}: Expected {expected_type}, got {token.type} = {token.value}')
+        else:
+            raise SyntaxError(f'{self.file_name}: Unexpected end of input (expected {expected_type})')
 
     def parse(self):
 
@@ -47,24 +51,28 @@ class Parser:
 
     def parse_var_declaration(self):
         var_type_token = self.eat(self.current().type)
+        type_suffix = None
+        if self.current() and self.current().type == 'TYPE_SUFFIX':
+            type_suffix = self.eat('TYPE_SUFFIX').value[1:]
         name_token = self.eat('IDENTIFIER')
-        self.eat('ASSIGNMENT')
         value = None
 
-        if var_type_token.type == 'INT':
-            value = self.parse_expression()
-        elif var_type_token.type == 'FLOAT':
-            value = self.parse_expression()
-        elif var_type_token.type == 'BOOL':
-            token = self.eat(self.current().type)
-            value = True if token.type == 'TRUE' else False
-        elif var_type_token.type == 'STR':
-            token = self.eat('LITERAL_STRING').value[1:-1].replace('"', '\\"').replace("\\'", "'")
-            value = self.parse_interpolated_string(token)
-        else:
-            raise SyntaxError(f'Invalid Variable Type: {var_type_token}')
+        if self.current() and self.current().type == 'ASSIGNMENT':
+            self.eat('ASSIGNMENT')
 
-        return VarDeclarationNode(var_type_token.type.lower(), name_token.value, value)
+            token = self.current().type
+            if token == 'LITERAL_STRING':
+                value = self.parse_expression()
+            elif token == 'TRUE':
+                self.eat('TRUE')
+                value = True
+            elif token == 'FALSE':
+                self.eat('FALSE')
+                value = False
+            else:
+                value = self.parse_expression()
+
+        return VarDeclarationNode(var_type_token.type.lower(), name_token.value, value, type_suffix)
 
 
 
@@ -74,41 +82,14 @@ class Parser:
 
 
         token = self.current().type
-
-        if token == 'LITERAL_STRING':
-            raw = self.eat('LITERAL_STRING').value[1:-1].replace('"', '\\"').replace("\\'", "'")
-            value = self.parse_interpolated_string(raw)
-
-        elif token == 'IDENTIFIER':
-            value = self.parse_expression()
-
-        else:
-            value = self.parse_expression()
+        value = self.parse_expression()
 
         end = '\\n'
         if self.current() and self.current().type == 'COMMA':
             self.eat('COMMA')
             self.eat('END')
             self.eat('ASSIGNMENT')
-
-            if self.current().type == 'LITERAL_STRING':
-                raw = self.eat('LITERAL_STRING').value[1:-1].replace('"', '\\"').replace("\\'", "'")
-                end = self.parse_interpolated_string(raw)
-            elif self.current().type == 'IDENTIFIER':
-                name = self.eat('IDENTIFIER').value
-                end = VarReferenceNode(name)
-            elif self.current().type in ('LITERAL_INT', 'LITERAL_FLOAT', 'TRUE', 'FALSE'):
-                val = self.eat(self.current().type).value
-                if self.current().type == 'TRUE':
-                    end = True
-                elif self.current().type == 'FALSE':
-                    end = False
-                elif self.current().type == 'LITERAL_INT':
-                    end = int(val)
-                elif self.current().type == 'LITERAL_FLOAT':
-                    end = float(val)
-            else:
-                raise SyntaxError(f'What did you write for end= ?')
+            end = self.parse_expression()
 
         self.eat('RIGHT_BRACKET')
         return PrintNode(value=value, end=end)
@@ -133,11 +114,27 @@ class Parser:
         return node
 
     def parse_atom(self):
+        if self.current().type == 'MINUS':
+            self.eat('MINUS')
+            atom = self.parse_atom()
+
+            if isinstance(atom, ExpressionNode) and atom.operator is None:
+                atom.left = -atom.left
+                return atom
+            elif isinstance(atom, VarReferenceNode):
+                return ExpressionNode(left=0, operator='-', right=atom)
+            else:
+                raise SyntaxError('Invalid usage of unary minus')
+
         tok = self.current().type
         if tok == 'LITERAL_INT':
             return ExpressionNode(left=int(self.eat(tok).value), operator=None, right=None)
         elif tok == 'LITERAL_FLOAT':
             return ExpressionNode(left=float(self.eat(tok).value), operator=None, right=None)
+        elif tok == 'LITERAL_STRING':
+            raw = self.eat('LITERAL_STRING').value[1:-1].replace('"', '\\"').replace("\\'", "'")
+            parts = self.parse_interpolated_string(raw)
+            return self.build_interpolated_expr(parts)
         elif tok == 'TRUE':
             self.eat(tok)
             return ExpressionNode(left=True, operator=None, right=None)
@@ -154,26 +151,46 @@ class Parser:
         else:
             raise SyntaxError('Unexpected token in expression')
 
+    def build_interpolated_expr(self, parts):
+        if not parts:
+            return ExpressionNode(left='""', operator=None, right=None)
+
+        expr = None
+        for part in parts:
+            node = part if isinstance(part, ExpressionNode) else ExpressionNode(left=part, operator=None, right=None)
+            if expr is None:
+                expr = node
+            else:
+                expr = ExpressionNode(left=expr, operator='+', right=node)
+        return expr
+
     def parse_interpolated_string(self, text: str):
         parts = []
         cursor = 0
+
+        text = text.replace('{{', '\x01').replace('}}', '\x02')
 
         for match in re.finditer(r'\{([^{}]+)\}', text):
             start, end = match.span()
 
             if start > cursor:
-                parts.append(text[cursor:start])
+                segment = text[cursor:start]
+
+                segment = segment.replace('\x01', '{').replace('\x02', '}')
+                parts.append(segment)
 
             inner_code = match.group(1).strip()
             tokens = tokenize(inner_code)
-            expr_parser = Parser(tokens)
+            expr_parser = Parser(tokens, self.file_name)
             expr = expr_parser.parse_expression()
             parts.append(expr)
 
             cursor = end
 
         if cursor < len(text):
-            parts.append(text[cursor:])
+            tail = text[cursor:]
+            tail = tail.replace('\x01', '{').replace('\x02', '}')
+            parts.append(tail)
 
         return parts
 
@@ -186,14 +203,18 @@ class Parser:
 
             token = self.current().type
             if token == 'LITERAL_STRING':
-                raw = self.eat('LITERAL_STRING').value[1:-1].replace('"', '\\"').replace("\\'", "'")
-                value = self.parse_interpolated_string(raw)
+                value = self.parse_expression()
             elif token in ('LITERAL_INT', 'LITERAL_FLOAT', 'TRUE', 'FALSE'):
-                value = self.eat(token).value
-                if isinstance(value, str):
-                    value = int(value) if '.' not in value else float(value)
-                if token == 'TRUE': value = True
-                if token == 'FALSE': value = False
+                if token == 'TRUE':
+                    self.eat('TRUE')
+                    value = True
+                elif token == 'FALSE':
+                    self.eat('FALSE')
+                    value = False
+                else:
+                    value = self.eat(token).value
+                    if isinstance(value, str):
+                        value = int(value) if '.' not in value else float(value)
             else:
                 value = self.parse_expression()
 
@@ -201,7 +222,11 @@ class Parser:
 
         elif current_type == 'PLUS_ASSIGNMENT':
             self.eat('PLUS_ASSIGNMENT')
-            value = self.parse_expression()
+            if self.current().type == 'LITERAL_STRING':
+                raw = self.eat('LITERAL_STRING').value[1:-1].replace('"', '\\"').replace("\\'", "'")
+                value = self.parse_interpolated_string(raw)
+            else:
+                value = self.parse_expression()
             return AugmentedAssignmentNode(name=name, operator='+', value=value)
 
         elif current_type == 'MINUS_ASSIGNMENT':

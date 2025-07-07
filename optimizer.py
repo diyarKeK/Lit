@@ -11,4 +11,8 @@ def remove_comments(code: str) -> str:
     return code
 
 def remove_underscores_in_numbers(code: str) -> str:
-    return re.sub(r'(\d)_(\d)', r'\1\2', code)
+    def clean_number(match):
+        number = match.group(0)
+        return number.replace('_', '')
+
+    return re.sub(r'\b\d[\d_]*(?:\.[\d_]+)?\b', clean_number, code)

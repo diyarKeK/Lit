@@ -28,7 +28,7 @@ def main():
 
     code = optimize(code, lit_path)
     tokens = tokenize(code)
-    parser = Parser(tokens)
+    parser = Parser(tokens, lit_path)
     ast = parser.parse()
     cpp_code = generate_cpp(ast)
 
@@ -43,28 +43,7 @@ def main():
     compile_cpp_to_exe(cpp_path, exe_path)
 
 # TO-DO
-# 1. просто объявление переменной без ее значения:
-#       fun main() {
-#           int a
-#           a = 0
-#
-#           print(a) // Если бы a не была инициализирована то в консоль бы вывелось: null
-#       }
-# 2. добавить: 
-#       fun main() {
-#           str braces = '{{ and }}'
-#           print(braces)
-#       }
-# 3. Добавить конкатенацию строк: str s = 'Hello' + name + '!'
-# 4. Добавить поддержку "" и `` для литеральных строк, 
-# где `` это как в Java: """ """
-# 5. Встроенная запуск ошибок по типу:
-#       fun main() {
-#           int a = '' // Error at *.lit:2: Integer type value cannot be literal string
-#           print(g) // Error at *.lit:3: Unknown variable
-#       }
-# 6. Выделение памяти: u8, i8, u16, i16 ... f32, f64
-# 7. if-else с операторами: and, or, not, ==, >, <, >=, <=, !=
+# 1. if-else с операторами: and, or, not, ==, >, <, >=, <=, !=
 
 if __name__ == "__main__":
     main()

@@ -14,9 +14,8 @@ TOKEN_TYPES = [
     ('INT', r'\bint\b'),
     ('FLOAT', r'\bfloat\b'),
     ('BOOL', r'\bbool\b'),
-    ('TRUE', r'\btrue\b'),
-    ('FALSE', r'\bfalse\b'),
     ('STR', r'\bstr\b'),
+    ('TYPE_SUFFIX', r':[iu](8|16|32|64)|:f(32|64)'),
 
     ('ASSIGNMENT', r'='),
     ('PLUS_ASSIGNMENT', r'\+='),
@@ -29,7 +28,9 @@ TOKEN_TYPES = [
 
     ('LITERAL_FLOAT', r'\d+\.\d+'),
     ('LITERAL_INT', r'\d+'),
-    ('LITERAL_STRING', r"'[^']*'"),
+    ('TRUE', r'\btrue\b'),
+    ('FALSE', r'\bfalse\b'),
+    ('LITERAL_STRING', r"'([^'\\]|\\.)*'"),
 
     ('PLUS', r'\+'),
     ('MINUS', r'-'),
@@ -46,16 +47,20 @@ TOKEN_TYPES = [
 ]
 
 class Token:
-    def __init__(self, type_, value):
+    def __init__(self, type_, value, line, column):
         self.type = type_
         self.value = value
+        self.line = line
+        self.column = column
 
     def __repr__(self):
-        return f'Token({self.type}) = {self.value}'
+        return f'{self.line}:{self.column}: Token({self.type}) = {self.value}'
 
 def tokenize(code: str):
     tokens = []
     i = 0
+    line = 1
+    column = 1
     unknown_statements_count = 0
 
     while i < len(code):
@@ -66,13 +71,20 @@ def tokenize(code: str):
             if match:
                 text = match.group(0)
 
-                if tok_type == 'UNKNOWN':
-                    unknown_statements_count += 1
-                    tokens.append(Token(tok_type, text))
-                    print(f'Token({tok_type}) = {text} <- IS UNKNOWN')
-                elif tok_type != 'SKIP' and tok_type != 'NEW_LINE':
-                    tokens.append(Token(tok_type, text))
-                    print(f'Token({tok_type}) = {text}')
+                if tok_type == 'NEW_LINE':
+                    line += 1
+                    column += 1
+                else:
+                    token = Token(tok_type, text, line, column)
+                    if tok_type == 'UNKNOWN':
+                        unknown_statements_count += 1
+                        tokens.append(token)
+                        print(f'{token.__repr__()} <- IS UNKNOWN')
+                    elif tok_type != 'SKIP' and tok_type != 'NEW_LINE':
+                        tokens.append(token)
+                        print(f'{token.__repr__()}')
+
+                    column += len(text)
 
                 i += len(text)
                 break
