@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Union, List
+from typing import Union, List, Optional
+
 
 @dataclass
 class Program:
@@ -48,3 +49,22 @@ class VarReferenceNode:
 class PrintNode:
     value: Union[str, int, float, bool, VarReferenceNode, List[Union[str, VarReferenceNode]]]
     end: Union[str, int, float, bool, VarReferenceNode] = '\\n'
+
+@dataclass
+class IfNode:
+    condition: 'ConditionNode'
+    body: List
+    elif_blocks: List['ElifBlock'] = None
+    else_body: Optional[List] = None
+
+@dataclass
+class ElifBlock:
+    condition: 'ConditionNode'
+    body: List
+
+@dataclass
+class ConditionNode:
+    left: Union['ConditionNode', VarReferenceNode, int, float, bool, str]
+    operator: str = None
+    right: Union['ConditionNode', VarReferenceNode, int, float, bool, str] = None
+    negate: bool = False

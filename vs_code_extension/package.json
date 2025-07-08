@@ -1,0 +1,35 @@
+{
+    "name": "lit-syntax-highlighting",
+    "displayName": "Lit Syntax Highlighting",
+    "description": "Highlights Lit Syntax in .lit files",
+    "version": "0.0.1",
+    "publisher": "_diyar_",
+    "engines": {
+        "vscode": "^1.50.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "lit",
+                "aliases": [
+                    "Lit",
+                    "lit"
+                ],
+                "extensions": [
+                    ".lit"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "lit",
+                "scopeName": "source.lit",
+                "path": "./syntaxes/lit.tmLanguage.json"
+            }
+        ]
+    }
+}

@@ -1,9 +1,10 @@
 from typing import Union
 
 from nodes import Program, Main_Function, PrintNode, VarDeclarationNode, VarReferenceNode, ExpressionNode, \
-    AssignmentNode, AugmentedAssignmentNode, IncrementNode
+    AssignmentNode, AugmentedAssignmentNode, IncrementNode, IfNode, ConditionNode
 import re
 import random
+
 
 def generate_cpp(ast: Program):
     lines = [
@@ -115,6 +116,9 @@ def generate_cpp(ast: Program):
 
                     output += ';'
                     lines.append(output)
+
+                elif isinstance(stmt, IfNode):
+                    lines.extend(generate_if_node(stmt, variables, indent='    '))
 
             lines.append('    return 0;')
             lines.append('}')
@@ -292,3 +296,96 @@ def expression_to_string_parts(expr):
 
     flatten(expr)
     return parts
+
+
+
+
+def generate_if_node(node: IfNode, variables: dict, indent=''):
+    lines = []
+
+    def generate_condition(condition: ConditionNode):
+        left = generate_expr(condition.left, variables)
+        right = generate_expr(condition.right, variables)
+        return f'{left} {condition.operator} {right}'
+
+    condition = generate_condition(node.condition)
+    lines.append(f'{indent}if ({condition}) {{')
+
+    for stmt in node.body:
+        lines.append(generate_stmt(stmt, variables, indent + '    '))
+    lines.append(f'{indent}}}')
+
+    for elif_block in node.elif_blocks:
+        condition = generate_condition(elif_block.condition)
+        lines.append(f'{indent}else if ({condition}) {{')
+
+        for stmt in elif_block.body:
+            lines.append(generate_stmt(stmt, variables, indent + '    '))
+        lines.append(f'{indent}}}')
+
+    if node.else_body:
+        lines.append(f'{indent}else {{')
+        for stmt in node.else_body:
+            lines.append(generate_stmt(stmt, variables, indent + '    '))
+        lines.append(f'{indent}}}')
+
+    return lines
+
+
+
+
+def generate_stmt(stmt, variables, indent=''):
+    if isinstance(stmt, PrintNode):
+        line = indent + 'cout << ' + merge_parts(stmt.value, variables)
+        if isinstance(stmt.end, list):
+            line += f' << {merge_parts(stmt.end, variables)}'
+        elif isinstance(stmt.end, VarReferenceNode):
+            line += f' << {stmt.end.name}'
+        elif isinstance(stmt.end, ExpressionNode):
+            line += f' << {generate_expr(stmt.end, variables)}'
+        else:
+            line += f' << {cpp_literal(stmt.end)}'
+        line += ';'
+        return line
+
+    elif isinstance(stmt, AssignmentNode):
+        if isinstance(stmt.value, list):
+            value_code = merge_parts(stmt.value, variables, for_string=True)
+        elif isinstance(stmt.value, ExpressionNode):
+            value_code = generate_expr(stmt.value, variables)
+        elif isinstance(stmt.value, VarReferenceNode):
+            value_code = stmt.value.name
+        else:
+            value_code = cpp_literal(stmt.value)
+        return f'{indent}{stmt.name} = {value_code};'
+
+    elif isinstance(stmt, IfNode):
+        return '\n'.join(generate_if_node(stmt, variables, indent))
+
+    elif isinstance(stmt, AugmentedAssignmentNode):
+        if stmt.name not in variables:
+            raise Exception(f'Variable {stmt.name} not declared')
+
+        var_type = variables[stmt.name]
+
+        if stmt.operator == '%' and 'float' in var_type:
+            raise Exception(f"Cannot use % for float var '{stmt.name}'")
+        elif stmt.operator in ('-', '*', '/', '%') and var_type == 'str':
+            raise Exception(f"Cannot use -, *, /, % for str var '{stmt.name}'")
+
+        if isinstance(stmt.value, list):
+            expr = merge_parts(stmt.value, variables, for_string=True)
+        elif isinstance(stmt.value, ExpressionNode):
+            expr = generate_expr(stmt.value, variables)
+        elif isinstance(stmt.value, VarReferenceNode):
+            expr = stmt.value.name
+        else:
+            expr = cpp_literal(stmt.value)
+
+        return f'{indent}{stmt.name} {stmt.operator}= {expr};'
+
+    elif isinstance(stmt, IncrementNode):
+        return f'{indent}{stmt.name}{stmt.operator};'
+
+    else:
+        raise Exception(f'Unsupported statement in if-body: {stmt}')

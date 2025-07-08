@@ -40,6 +40,8 @@ class Parser:
                 body.append(self.parse_print())
             elif self.current().type == 'IDENTIFIER':
                 body.append(self.parse_assignment_or_expression())
+            elif self.current().type == 'IF':
+                body.append(self.parse_if())
             else:
                 raise SyntaxError(f'Unexpected Token: {self.current()}')
 
@@ -259,3 +261,85 @@ class Parser:
 
         else:
             raise SyntaxError(f'Unknown assignment or expression for {name}')
+
+    def parse_if(self):
+        self.eat('IF')
+        condition = self.parse_condition()
+
+        if self.current().type == 'LEFT_BRACE':
+            self.eat('LEFT_BRACE')
+            body = self.parse_block()
+        else:
+            body = [self.parse_single_statement()]
+
+        elif_blocks = []
+        else_body = None
+
+        while self.current() and self.current().type == 'ELSE':
+            self.eat('ELSE')
+
+            if self.current().type == 'IF':
+                self.eat('IF')
+                elif_condition = self.parse_condition()
+                if self.current().type == 'LEFT_BRACE':
+                    self.eat('LEFT_BRACE')
+                    elif_body = self.parse_block()
+                else:
+                    elif_body = [self.parse_single_statement()]
+                elif_blocks.append(ElifBlock(condition=elif_condition, body=elif_body))
+            else:
+                if self.current().type == 'LEFT_BRACE':
+                    self.eat('LEFT_BRACE')
+                    else_body = self.parse_block()
+                else:
+                    else_body = [self.parse_single_statement()]
+                break
+
+        return IfNode(condition=condition, body=body, elif_blocks=elif_blocks, else_body=else_body)
+
+    def parse_condition(self):
+        left = self.parse_expression()
+
+        if self.current().type in ('EQUALS', 'NOT_EQUALS', 'LESS', 'GREATER', 'LESS_EQUALS', 'GREATER_EQUALS'):
+            op = self.eat(self.current().type).value
+            right = self.parse_expression()
+            return ConditionNode(left=left, operator=op, right=right)
+        elif self.current().type in ('AND', 'OR'):
+            op = self.eat(self.current().type).value
+            right = self.parse_condition()
+            return ConditionNode(left=left, operator=op, right=right)
+        elif self.current().type == 'NOT':
+            self.eat('NOT')
+            return ConditionNode(left='not', operator='not', right=self.parse_condition())
+
+
+        return ConditionNode(left=left, operator=None, right=None)
+
+    def parse_block(self):
+        body = []
+        while self.current() and self.current().type != 'RIGHT_BRACE':
+            if self.current().type in ('INT', 'FLOAT', 'BOOL', 'STR'):
+                body.append(self.parse_var_declaration())
+            elif self.current().type == 'PRINT':
+                body.append(self.parse_print())
+            elif self.current().type == 'IF':
+                body.append(self.parse_if())
+            elif self.current().type == 'IDENTIFIER':
+                body.append(self.parse_assignment_or_expression())
+            else:
+                raise SyntaxError(f'Unexpected token in block: {self.current()}')
+
+        self.eat('RIGHT_BRACE')
+        return body
+
+    def parse_single_statement(self):
+        if self.current().type == 'PRINT':
+            return self.parse_print()
+        elif self.current().type == 'IF':
+            return self.parse_if()
+        elif self.current().type == 'IDENTIFIER':
+            return self.parse_assignment_or_expression()
+        elif self.current().type in ('INT', 'FLOAT', 'STR', 'BOOL'):
+            return self.parse_var_declaration()
+        else:
+            raise SyntaxError(f'Unexpected token in single-line if-body: {self.current()}')

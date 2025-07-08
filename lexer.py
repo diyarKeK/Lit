@@ -17,7 +17,6 @@ TOKEN_TYPES = [
     ('STR', r'\bstr\b'),
     ('TYPE_SUFFIX', r':[iu](8|16|32|64)|:f(32|64)'),
 
-    ('ASSIGNMENT', r'='),
     ('PLUS_ASSIGNMENT', r'\+='),
     ('MINUS_ASSIGNMENT', r'-='),
     ('MULTIPLY_ASSIGNMENT', r'\*='),
@@ -41,6 +40,19 @@ TOKEN_TYPES = [
     ('PRINT', r'\bprint\b'),
     ('END', r'\bend\b'),
     ('COMMA', r','),
+
+    ('IF', r'\bif\b'),
+    ('ELSE', r'\belse\b'),
+    ('AND', r'\band\b'),
+    ('OR', r'\bor\b'),
+    ('NOT', r'\bnot\b'),
+    ('EQUALS', r'=='),
+    ('NOT_EQUALS', r'!='),
+    ('LESS_EQUALS', r'<='),
+    ('GREATER_EQUALS', r'>='),
+    ('LESS', r'<'),
+    ('GREATER', r'>'),
+    ('ASSIGNMENT', r'='),
 
     ('IDENTIFIER', r'\b[a-zA-Z_][a-zA-Z0-9_]*\b'),
     ('UNKNOWN', r'.'),
