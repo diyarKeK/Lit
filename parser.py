@@ -82,8 +82,6 @@ class Parser:
         self.eat('PRINT')
         self.eat('LEFT_BRACKET')
 
-
-        token = self.current().type
         value = self.parse_expression()
 
         end = '\\n'
@@ -147,7 +145,7 @@ class Parser:
             return VarReferenceNode(self.eat(tok).value)
         elif tok == 'LEFT_BRACKET':
             self.eat('LEFT_BRACKET')
-            expr = self.parse_expression()
+            expr = self.parse_condition()
             self.eat('RIGHT_BRACKET')
             return expr
         else:
@@ -213,10 +211,12 @@ class Parser:
                 elif token == 'FALSE':
                     self.eat('FALSE')
                     value = False
-                else:
-                    value = self.eat(token).value
-                    if isinstance(value, str):
-                        value = int(value) if '.' not in value else float(value)
+                if token == 'LITERAL_INT':
+                    raw_value = self.eat(token).value
+                    value = ExpressionNode(left=int(raw_value), operator=None, right=None)
+                elif token == 'LITERAL_FLOAT':
+                    raw_value = self.eat(token).value
+                    value = ExpressionNode(left=float(raw_value), operator=None, right=None)
             else:
                 value = self.parse_expression()
 
@@ -297,24 +297,6 @@ class Parser:
 
         return IfNode(condition=condition, body=body, elif_blocks=elif_blocks, else_body=else_body)
 
-    def parse_condition(self):
-        left = self.parse_expression()
-
-        if self.current().type in ('EQUALS', 'NOT_EQUALS', 'LESS', 'GREATER', 'LESS_EQUALS', 'GREATER_EQUALS'):
-            op = self.eat(self.current().type).value
-            right = self.parse_expression()
-            return ConditionNode(left=left, operator=op, right=right)
-        elif self.current().type in ('AND', 'OR'):
-            op = self.eat(self.current().type).value
-            right = self.parse_condition()
-            return ConditionNode(left=left, operator=op, right=right)
-        elif self.current().type == 'NOT':
-            self.eat('NOT')
-            return ConditionNode(left='not', operator='not', right=self.parse_condition())
-
-
-        return ConditionNode(left=left, operator=None, right=None)
-
     def parse_block(self):
         body = []
         while self.current() and self.current().type != 'RIGHT_BRACE':
@@ -343,3 +325,38 @@ class Parser:
             return self.parse_var_declaration()
         else:
             raise SyntaxError(f'Unexpected token in single-line if-body: {self.current()}')
+
+    def parse_condition(self):
+        return self.parse_or()
+
+    def parse_or(self):
+        node = self.parse_and()
+        while self.current() and self.current().type == 'OR':
+            self.eat('OR')
+            right = self.parse_and()
+            node = ConditionNode(left=node, operator='or', right=right)
+        return node
+
+    def parse_and(self):
+        node = self.parse_not()
+        while self.current() and self.current().type == 'AND':
+            self.eat('AND')
+            right = self.parse_not()
+            node = ConditionNode(left=node, operator='and', right=right)
+        return node
+
+    def parse_not(self):
+        if self.current() and self.current().type == 'NOT':
+            self.eat('NOT')
+            operand = self.parse_not()
+            return ConditionNode(left='not', operator='not', right=operand)
+        return self.parse_comparison()
+
+    def parse_comparison(self):
+        node = self.parse_expression()
+        while self.current() and self.current().type in ('EQUALS', 'NOT_EQUALS', 'LESS', 'GREATER', 'LESS_EQUALS', 'GREATER_EQUALS'):
+            op = self.eat(self.current().type).value
+            right = self.parse_expression()
+            node = ConditionNode(left=node, operator=op, right=right)
+        return node
+

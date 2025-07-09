@@ -50,7 +50,7 @@ def generate_cpp(ast: Program):
                             expr_list = expression_to_string_parts(stmt.value)
                             line = f'{var_type} {stmt.name} = ' + merge_parts(expr_list, variables, for_string=True) + ';'
                         else:
-                            line = f'{var_type} {stmt.name} = {generate_expr(stmt.value, variables)};'
+                            line = f'{var_type} {stmt.name} = {generate_expr(stmt.value, variables, var_type=variables[stmt.name])};'
                         lines.append(f'    {line}')
                     else:
                         val = cpp_literal(stmt.value)
@@ -100,19 +100,30 @@ def generate_cpp(ast: Program):
 
                 elif isinstance(stmt, PrintNode):
                     output = '    cout << '
+
                     if stmt.value == '':
                         stmt.value = '""'
 
-                    output += merge_parts(stmt.value, variables)
+                    elif isinstance(stmt.value, list):
+                        output += merge_parts(stmt.value, variables, for_string=False)
+                    elif isinstance(stmt.value, ExpressionNode):
+                        expr_parts = expression_to_string_parts(stmt.value)
+                        output += merge_parts(expr_parts, variables, for_string=False)
+                    elif isinstance(stmt.value, VarReferenceNode):
+                        output += merge_parts(stmt.value, variables, for_string=False)
+                    else:
+                        output += merge_parts(stmt.value, variables, for_string=False)
 
                     if isinstance(stmt.end, list):
-                        output += f' << {merge_parts(stmt.end, variables)}'
+                        output += f' << {merge_parts(stmt.end, variables, for_string=False)}'
                     elif isinstance(stmt.end, VarReferenceNode):
-                        output += f' << {stmt.end.name}'
+                        output += f' << {merge_parts(stmt.end, variables, for_string=False)}'
                     elif isinstance(stmt.end, ExpressionNode):
-                        output += f' << {generate_expr(stmt.end, variables)}'
+                        expr_parts_end = expression_to_string_parts(stmt.end)
+                        output += f' << {merge_parts(expr_parts_end, variables, for_string=False)}'
                     else:
                         output += f' << {cpp_literal(stmt.end)}'
+
 
                     output += ';'
                     lines.append(output)
@@ -160,7 +171,7 @@ def cpp_literal(val: Union[str, int, float, bool]) -> str:
     elif isinstance(val, int):
         return str(int(val))
     elif isinstance(val, float):
-        return str(float(val))
+        return f'{val}f'
     else:
         return str(val)
 
@@ -184,6 +195,10 @@ def merge_parts(value, variables, for_string=False):
                     parts.append(f'to_string((float){part.name})')
                 elif 'f64' in var_type:
                     parts.append(f'to_string((double){part.name})')
+                elif 'int' in var_type:
+                    parts.append(f'to_string({part.name})')
+                elif var_type == 'str':
+                    parts.append(f'{part.name}')
                 else:
                     parts.append(f'to_string({part.name})')
             elif isinstance(part, ExpressionNode):
@@ -197,6 +212,10 @@ def merge_parts(value, variables, for_string=False):
                             parts.append(f'to_string((double){inner.name})')
                         elif 'i8' in var_type or 'u8' in var_type:
                             parts.append(f'to_string(static_cast<int>({inner.name}))')
+                        elif var_type.startswith('int'):
+                            parts.append(f'to_string({inner.name})')
+                        elif var_type == 'str':
+                            parts.append(f'{inner.name}')
                         else:
                             parts.append(f'to_string({inner.name})')
                     elif isinstance(inner, str):
@@ -235,7 +254,7 @@ def merge_parts(value, variables, for_string=False):
             return value.name
 
     elif isinstance(value, ExpressionNode):
-        return generate_expr(value, variables)
+        return generate_expr(value, variables, for_string=True)
 
     elif isinstance(value, bool):
         return '"true"' if value else '"false"'
@@ -245,16 +264,17 @@ def merge_parts(value, variables, for_string=False):
 
     elif isinstance(value, str):
         return f'std::string("{value}")'
+
     else:
         return f'string("{value}")'
 
-def generate_expr(expr, variables, for_string=False):
+def generate_expr(expr, variables, for_string=False, var_type=''):
     if isinstance(expr, ExpressionNode):
         if expr.operator is None:
-            return generate_expr(expr.left, variables)
+            return generate_expr(expr.left, variables, for_string, var_type)
         else:
-            left = generate_expr(expr.left, variables)
-            right = generate_expr(expr.right, variables)
+            left = generate_expr(expr.left, variables, for_string, var_type)
+            right = generate_expr(expr.right, variables, for_string, var_type)
             return f'({left} {expr.operator} {right})'
 
     elif isinstance(expr, VarReferenceNode):
@@ -264,9 +284,9 @@ def generate_expr(expr, variables, for_string=False):
         elif 'i8' in var_type or 'u8' in var_type:
             return f'static_cast<int>({expr.name})'
         elif 'f32' in var_type:
-            return f'to_string((float){expr.name})' if for_string else f'fixed << setprecision(6) << {expr.name}'
+            return f'to_string((float){expr.name})' if for_string else expr.name
         elif 'f64' in var_type:
-            return f'to_string((double){expr.name})' if for_string else f'fixed << setprecision(12) << {expr.name}'
+            return f'to_string((double){expr.name})' if for_string else expr.name
         else:
             return expr.name
 
@@ -276,8 +296,15 @@ def generate_expr(expr, variables, for_string=False):
     elif isinstance(expr, bool):
         return '"true"' if expr else '"false"'
 
-    elif isinstance(expr, (int, float)):
+    elif isinstance(expr, int):
         return str(expr)
+
+    elif isinstance(expr, float):
+        if 'f32' in var_type:
+            return f'{expr}f'
+        elif 'f64' in var_type:
+            return f'{expr}'
+        return f'{expr}f'
 
     else:
         raise Exception(f'Unknown expression part: {expr}')
@@ -303,10 +330,28 @@ def expression_to_string_parts(expr):
 def generate_if_node(node: IfNode, variables: dict, indent=''):
     lines = []
 
-    def generate_condition(condition: ConditionNode):
-        left = generate_expr(condition.left, variables)
-        right = generate_expr(condition.right, variables)
-        return f'{left} {condition.operator} {right}'
+    def generate_condition(condition):
+        if isinstance(condition, ConditionNode):
+            if condition.operator == 'not':
+                inner = generate_condition(condition.right)
+                return f'!({inner})'
+            elif condition.operator in ('and', 'or'):
+                left = generate_condition(condition.left)
+                right = generate_condition(condition.right)
+                op = '&&' if condition.operator == 'and' else '||'
+                return f'({left} {op} {right})'
+            else:
+                left = generate_expr(condition.left, variables)
+                right = generate_expr(condition.right, variables)
+                return f'{left} {condition.operator} {right}'
+        elif isinstance(condition, VarReferenceNode):
+            return condition.name
+        elif isinstance(condition, ExpressionNode):
+            return generate_expr(condition, variables)
+        elif isinstance(condition, bool):
+            return 'true' if condition else 'false'
+        else:
+            raise Exception(f'Unknown condition type: {type(condition)}')
 
     condition = generate_condition(node.condition)
     lines.append(f'{indent}if ({condition}) {{')
@@ -336,15 +381,30 @@ def generate_if_node(node: IfNode, variables: dict, indent=''):
 
 def generate_stmt(stmt, variables, indent=''):
     if isinstance(stmt, PrintNode):
-        line = indent + 'cout << ' + merge_parts(stmt.value, variables)
+        line = indent + 'cout << '
+
+        if stmt.value == '':
+            stmt.value = '""'
+        elif isinstance(stmt.value, list):
+            line += merge_parts(stmt.value, variables, for_string=False)
+        elif isinstance(stmt.value, ExpressionNode):
+            expr_parts = expression_to_string_parts(stmt.value)
+            line += merge_parts(expr_parts, variables, for_string=False)
+        elif isinstance(stmt.value, VarReferenceNode):
+            line += merge_parts(stmt.value, variables, for_string=False)
+        else:
+            line += merge_parts(stmt.value, variables, for_string=False)
+
         if isinstance(stmt.end, list):
-            line += f' << {merge_parts(stmt.end, variables)}'
+            line += f' << {merge_parts(stmt.end, variables, for_string=False)}'
         elif isinstance(stmt.end, VarReferenceNode):
-            line += f' << {stmt.end.name}'
+            line += f' << {merge_parts(stmt.end, variables, for_string=False)}'
         elif isinstance(stmt.end, ExpressionNode):
-            line += f' << {generate_expr(stmt.end, variables)}'
+            expr_parts_end = expression_to_string_parts(stmt.end)
+            line += f' << {merge_parts(expr_parts_end, variables, for_string=False)}'
         else:
             line += f' << {cpp_literal(stmt.end)}'
+
         line += ';'
         return line
 
@@ -372,7 +432,6 @@ def generate_stmt(stmt, variables, indent=''):
             raise Exception(f"Cannot use % for float var '{stmt.name}'")
         elif stmt.operator in ('-', '*', '/', '%') and var_type == 'str':
             raise Exception(f"Cannot use -, *, /, % for str var '{stmt.name}'")
-
         if isinstance(stmt.value, list):
             expr = merge_parts(stmt.value, variables, for_string=True)
         elif isinstance(stmt.value, ExpressionNode):

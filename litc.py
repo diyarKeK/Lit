@@ -42,8 +42,5 @@ def main():
 
     compile_cpp_to_exe(cpp_path, exe_path)
 
-# TO-DO
-# 1. if-else с операторами: and, or, not, ==, >, <, >=, <=, !=
-
 if __name__ == "__main__":
     main()

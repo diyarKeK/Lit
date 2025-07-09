@@ -91,3 +91,14 @@ Lit Programming Language Repository
           float:f32 i = 3.141592
           float:f64 j = 3.141592653589
       }
+- if-else constructions:
+
+      fun main() {
+          int a = 10
+          
+          if a % 2 == 0 {
+              print('a is even: {a}')
+          } else {
+              print('a is odd: {a}')
+          }
+      }
