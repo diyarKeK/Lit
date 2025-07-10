@@ -106,12 +106,19 @@ class Parser:
         return node
 
     def parse_factor(self):
-        node = self.parse_atom()
+        node = self.parse_unary()
         while self.current() and self.current().type in ('MULTIPLY', 'DIVIDE', 'MODULO'):
             op = self.eat(self.current().type).value
-            right = self.parse_atom()
+            right = self.parse_unary()
             node = ExpressionNode(left=node, operator=op, right=right)
         return node
+
+    def parse_unary(self):
+        if self.current().type == 'NOT':
+            self.eat('NOT')
+            operand = self.parse_unary()
+            return ExpressionNode(left=None, operator='not', right=operand)
+        return self.parse_atom()
 
     def parse_atom(self):
         if self.current().type == 'MINUS':
@@ -149,7 +156,7 @@ class Parser:
             self.eat('RIGHT_BRACKET')
             return expr
         else:
-            raise SyntaxError('Unexpected token in expression')
+            raise SyntaxError(f'Unexpected token in expression {tok}')
 
     def build_interpolated_expr(self, parts):
         if not parts:
