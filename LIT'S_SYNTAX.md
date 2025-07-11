@@ -957,38 +957,39 @@ throw. А если и произошла ошибка срабатывается
   - h. `and`
   - i. `or`
   - j. `not`
-  - k. `fun`
-  - l. `return`
-  - m. `while`
-  - n. `for`
-  - o. `break`
-  - p. `continue`
-  - q. `in`
-  - r. `switch`
-  - s. `case`
-  - t. `import`
-  - u. `as`
-  - v. `package`
-  - w. `try`
-  - x. `catch`
-  - y. `throw`
-  - z. `class`
-  - aa. `this`
-  - ab. `gl`
-  - ac. `final`
-  - ad. `static`
-  - ae. `new`
-  - af. `null`
-  - ag. `data`
-  - ah. `exception`
-  - ai. `abstract`
-  - aj. `interface`
-  - ak. `enum`
-  - al. `instance_of`
-  - am. `launch`
-  - an. `async`
-  - ao. `await`
-  - ap. `module`
+  - k. `while`
+  - l. `for`
+  - m. `break`
+  - n. `continue`
+  - o. `in`
+  - p. `fun`
+  - q. `return`
+  - r. `lambda`
+  - s. `switch`
+  - t. `case`
+  - u. `import`
+  - v. `as`
+  - w. `package`
+  - x. `try`
+  - y. `catch`
+  - z. `throw`
+  - aa. `class`
+  - ab. `this`
+  - ac. `gl`
+  - ad. `final`
+  - ae. `static`
+  - af. `new`
+  - ag. `null`
+  - ah. `data`
+  - ai. `exception`
+  - aj. `abstract`
+  - ak. `interface`
+  - al. `enum`
+  - am. `instance_of`
+  - an. `launch`
+  - ao. `async`
+  - ap. `await`
+  - aq. `module`
 
 ## Приколы
   - a. Если человек сделал программу 
