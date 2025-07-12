@@ -41,6 +41,8 @@ TOKEN_TYPES = [
     ('END', r'\bend\b'),
     ('COMMA', r','),
 
+    ('INPUT', r'\binput\b'),
+
     ('IF', r'\bif\b'),
     ('ELSE', r'\belse\b'),
     ('AND', r'\band\b'),

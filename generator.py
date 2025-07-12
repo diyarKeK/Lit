@@ -1,7 +1,7 @@
 from typing import Union
 
 from nodes import Program, Main_Function, PrintNode, VarDeclarationNode, VarReferenceNode, ExpressionNode, \
-    AssignmentNode, AugmentedAssignmentNode, IncrementNode, IfNode, ConditionNode
+    AssignmentNode, AugmentedAssignmentNode, IncrementNode, IfNode, ConditionNode, InputNode
 import re
 import random
 
@@ -57,6 +57,20 @@ def generate_stmt(stmt, variables, indent='') -> str:
                 'str': '""',
             }[stmt.var_type]
             line += f'{indent}{var_type} {stmt.name} = {default};'
+        elif isinstance(stmt.value, InputNode):
+            prompt = ''
+            if isinstance(stmt.value.message, str):
+                prompt = f'cout << "{stmt.value.message}";'
+            elif isinstance(stmt.value.message, VarReferenceNode):
+                prompt = f'cout << "{stmt.value.message.name}"'
+            elif isinstance(stmt.value.message, list):
+                prompt = f'cout << {merge_parts(stmt.value.message, variables, for_string=False)};'
+            elif isinstance(stmt.value.message, ExpressionNode):
+                prompt = f'cout << {generate_expr(stmt.value.message, variables)};'
+
+            read = f'cin >> {stmt.name};'
+            line += f'{indent}{var_type} {stmt.name};\n{indent}{prompt}\n{indent}{read}'
+
         elif isinstance(stmt.value, list):
             line += f'{indent}{var_type} {stmt.name} = {merge_parts(stmt.value, variables, for_string=True)};'
         elif isinstance(stmt.value, ExpressionNode):

@@ -15,7 +15,7 @@ class Main_Function:
 class VarDeclarationNode:
     var_type: str
     name: str
-    value: Union[str, int, float, bool, List[Union[str, 'VarReferenceNode']]]
+    value: Union[str, int, float, bool, 'InputNode', 'VarReferenceNode', List[Union[str, 'VarReferenceNode']]]
     suffix: str = None
 
 @dataclass
@@ -49,6 +49,11 @@ class VarReferenceNode:
 class PrintNode:
     value: Union[str, int, float, bool, VarReferenceNode, List[Union[str, VarReferenceNode]]]
     end: Union[str, int, float, bool, VarReferenceNode] = '\\n'
+
+@dataclass
+class InputNode:
+    variable: VarReferenceNode
+    message: Union[str, VarReferenceNode, List[Union[str, VarReferenceNode]]]
 
 @dataclass
 class IfNode:

@@ -62,17 +62,24 @@ class Parser:
         if self.current() and self.current().type == 'ASSIGNMENT':
             self.eat('ASSIGNMENT')
 
-            token = self.current().type
-            if token == 'LITERAL_STRING':
-                value = self.parse_expression()
-            elif token == 'TRUE':
-                self.eat('TRUE')
-                value = True
-            elif token == 'FALSE':
-                self.eat('FALSE')
-                value = False
+            if self.current().type == 'INPUT':
+                self.eat('INPUT')
+                self.eat('LEFT_BRACKET')
+                message = self.parse_expression()
+                self.eat('RIGHT_BRACKET')
+                value = InputNode(variable=VarReferenceNode(name_token.value), message=message)
             else:
-                value = self.parse_expression()
+                token = self.current().type
+                if token == 'LITERAL_STRING':
+                    value = self.parse_expression()
+                elif token == 'TRUE':
+                    self.eat('TRUE')
+                    value = True
+                elif token == 'FALSE':
+                    self.eat('FALSE')
+                    value = False
+                else:
+                    value = self.parse_expression()
 
         return VarDeclarationNode(var_type_token.type.lower(), name_token.value, value, type_suffix)
 
