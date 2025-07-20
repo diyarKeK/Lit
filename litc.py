@@ -26,7 +26,7 @@ def main():
     with open(lit_path, 'r', encoding='utf-8') as f:
         code = f.read()
 
-    code = optimize(code, lit_path)
+    code = optimize(code)
     tokens = tokenize(code)
     parser = Parser(tokens, lit_path)
     ast = parser.parse()
@@ -41,6 +41,11 @@ def main():
         f.write(cpp_code)
 
     compile_cpp_to_exe(cpp_path, exe_path)
+
+# TO-DO:
+# сделать компилятор более оптимизированным по коду:
+# Literal_String, Literal_Int, Literal_Float, Input, и все токены из lexer.py/TOKEN_TYPES
+# крч сделай так чтобы компиллятор был более масштабируемым.
 
 if __name__ == "__main__":
     main()

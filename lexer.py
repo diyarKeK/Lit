@@ -11,6 +11,9 @@ TOKEN_TYPES = [
     ('NEW_LINE', r'\n'),
     ('SKIP', r'[ \t]+'),
 
+    ('COMMENT_BLOCK', r'/\*[\s\S]*?\*/'),
+    ('COMMENT_LINE', r'//.*'),
+
     ('INT', r'\bint\b'),
     ('FLOAT', r'\bfloat\b'),
     ('BOOL', r'\bbool\b'),
@@ -93,7 +96,9 @@ def tokenize(code: str):
                     if tok_type == 'UNKNOWN':
                         unknown_statements_count += 1
                         tokens.append(token)
-                        print(f'{token.__repr__()} <- IS UNKNOWN')
+                        print(f'{token.__repr__()} <- IS UNKNOWN ======================================================')
+                    elif tok_type.startswith('COMMENT'):
+                        pass
                     elif tok_type != 'SKIP' and tok_type != 'NEW_LINE':
                         tokens.append(token)
                         print(f'{token.__repr__()}')

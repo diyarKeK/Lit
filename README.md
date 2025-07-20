@@ -102,3 +102,9 @@ Lit Programming Language Repository
               print('a is odd: {a}')
           }
       }
+- Can get data by input():
+
+      fun main() {
+          str s = input('Enter a word: ')
+          print(s)
+      }
