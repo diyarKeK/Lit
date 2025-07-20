@@ -59,6 +59,11 @@ TOKEN_TYPES = [
     ('GREATER', r'>'),
     ('ASSIGNMENT', r'='),
 
+    ('WHILE', r'\bwhile\b'),
+    ('FOR', r'\bfor\b'),
+    ('BREAK', r'\bbreak\b'),
+    ('CONTINUE', r'\bcontinue\b'),
+
     ('IDENTIFIER', r'\b[a-zA-Z_][a-zA-Z0-9_]*\b'),
     ('UNKNOWN', r'.'),
 ]

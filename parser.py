@@ -42,6 +42,10 @@ class Parser:
                 body.append(self.parse_assignment_or_expression())
             elif self.current().type == 'IF':
                 body.append(self.parse_if())
+            elif self.current().type == 'WHILE':
+                body.append(self.parse_while())
+            elif self.current().type == 'FOR':
+                body.append(self.parse_for())
             else:
                 raise SyntaxError(f'Unexpected Token: {self.current()}')
 
@@ -162,6 +166,8 @@ class Parser:
             expr = self.parse_condition()
             self.eat('RIGHT_BRACKET')
             return expr
+        elif tok == 'RIGHT_BRACKET':
+            return ExpressionNode(left='', operator=None, right=None)
         else:
             raise SyntaxError(f'Unexpected token in expression {tok}')
 
@@ -310,6 +316,31 @@ class Parser:
                 break
 
         return IfNode(condition=condition, body=body, elif_blocks=elif_blocks, else_body=else_body)
+
+    def parse_while(self):
+        self.eat('WHILE')
+        condition = self.parse_condition()
+
+        if self.current().type == 'LEFT_BRACE':
+            self.eat('LEFT_BRACE')
+            body = self.parse_block()
+        else:
+            body = self.parse_single_statement()
+
+        else_body = None
+
+        if self.current() and self.current().type == 'ELSE':
+            self.eat('ELSE')
+            if self.current().type == 'LEFT_BRACE':
+                self.eat('LEFT_BRACE')
+                else_body = self.parse_block()
+            else:
+                else_body = [self.parse_single_statement()]
+
+        return WhileNode(condition=condition, body=body, else_body=else_body)
+
+    def parse_for(self):
+        pass
 
     def parse_block(self):
         body = []

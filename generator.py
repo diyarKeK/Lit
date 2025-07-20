@@ -1,7 +1,8 @@
 from typing import Union
 
 from nodes import Program, Main_Function, PrintNode, VarDeclarationNode, VarReferenceNode, ExpressionNode, \
-    AssignmentNode, AugmentedAssignmentNode, IncrementNode, IfNode, ConditionNode, InputNode
+    AssignmentNode, AugmentedAssignmentNode, IncrementNode, IfNode, ConditionNode, InputNode, WhileNode, BreakNode, \
+    ContinueNode
 import re
 import random
 
@@ -159,6 +160,15 @@ def generate_stmt(stmt, variables, indent='') -> str:
 
     elif isinstance(stmt, IfNode):
         return '\n'.join(generate_if_node(stmt, variables, indent))
+
+    elif isinstance(stmt, WhileNode):
+        return '\n'.join(generate_while_node(stmt, variables, indent))
+
+    elif isinstance(stmt, BreakNode):
+        return f'{indent}break;'
+
+    elif isinstance(stmt, ContinueNode):
+        return f'{indent}continue;'
 
     else:
         raise Exception(f'Unknown Statement: {stmt}')
@@ -376,30 +386,7 @@ def expression_to_string_parts(expr):
 def generate_if_node(node: IfNode, variables: dict, indent=''):
     lines = []
 
-    def generate_condition(condition):
-        if isinstance(condition, ConditionNode):
-            if condition.operator == 'not':
-                inner = generate_condition(condition.right)
-                return f'!({inner})'
-            elif condition.operator in ('and', 'or'):
-                left = generate_condition(condition.left)
-                right = generate_condition(condition.right)
-                op = '&&' if condition.operator == 'and' else '||'
-                return f'({left} {op} {right})'
-            else:
-                left = generate_expr(condition.left, variables)
-                right = generate_expr(condition.right, variables)
-                return f'{left} {condition.operator} {right}'
-        elif isinstance(condition, VarReferenceNode):
-            return condition.name
-        elif isinstance(condition, ExpressionNode):
-            return generate_expr(condition, variables)
-        elif isinstance(condition, bool):
-            return 'true' if condition else 'false'
-        else:
-            raise Exception(f'Unknown condition type: {type(condition)}')
-
-    condition = generate_condition(node.condition)
+    condition = generate_condition(node.condition, variables)
     lines.append(f'{indent}if ({condition}) {{')
 
     for stmt in node.body:
@@ -408,7 +395,7 @@ def generate_if_node(node: IfNode, variables: dict, indent=''):
     lines.append(f'{indent}}}')
 
     for elif_block in node.elif_blocks:
-        condition = generate_condition(elif_block.condition)
+        condition = generate_condition(elif_block.condition, variables)
         lines.append(f'{indent}else if ({condition}) {{')
 
         for stmt in elif_block.body:
@@ -424,3 +411,49 @@ def generate_if_node(node: IfNode, variables: dict, indent=''):
         lines.append(f'{indent}}}')
 
     return lines
+
+
+def generate_while_node(node: WhileNode, variables: dict, indent=''):
+    lines = []
+
+    condition = generate_condition(node.condition, variables)
+    lines.append(f'{indent}while ({condition}) {{')
+
+    for stmt in node.body:
+        lines.append(generate_stmt(stmt, variables, indent + '    '))
+
+    if node.else_body:
+        lines.append(f'{indent}    if (!({condition})) {{')
+
+        for stmt in node.else_body:
+            lines.append(generate_stmt(stmt, variables, indent + '        '))
+
+        lines.append(f'{indent}    }}')
+
+    lines.append(f'{indent}}}')
+
+    return lines
+
+
+def generate_condition(condition, variables):
+    if isinstance(condition, ConditionNode):
+        if condition.operator == 'not':
+            inner = generate_condition(condition.right, variables)
+            return f'!({inner})'
+        elif condition.operator in ('and', 'or'):
+            left = generate_condition(condition.left, variables)
+            right = generate_condition(condition.right, variables)
+            op = '&&' if condition.operator == 'and' else '||'
+            return f'({left} {op} {right})'
+        else:
+            left = generate_expr(condition.left, variables)
+            right = generate_expr(condition.right, variables)
+            return f'{left} {condition.operator} {right}'
+    elif isinstance(condition, VarReferenceNode):
+        return condition.name
+    elif isinstance(condition, ExpressionNode):
+        return generate_expr(condition, variables)
+    elif isinstance(condition, bool):
+        return 'true' if condition else 'false'
+    else:
+        raise Exception(f'Unknown condition type: {type(condition)}')

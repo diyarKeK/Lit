@@ -68,6 +68,26 @@ class ElifBlock:
     body: List
 
 @dataclass
+class WhileNode:
+    condition: 'ConditionNode'
+    body: List
+    else_body: Optional[List] = None
+
+@dataclass
+class ForNode:
+    condition: 'ConditionNode'
+    body: List
+    else_body: Optional[List] = None
+
+@dataclass
+class BreakNode:
+    _: str = None
+
+@dataclass
+class ContinueNode:
+    _: str = None
+
+@dataclass
 class ConditionNode:
     left: Union['ConditionNode', VarReferenceNode, int, float, bool, str]
     operator: str = None
