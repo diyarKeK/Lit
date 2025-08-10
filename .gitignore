@@ -6,7 +6,6 @@ __pycahe__/
 build/
 dist/
 tests/
-hello.lit
 
 temp/
 .vscode/

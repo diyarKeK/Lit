@@ -288,6 +288,18 @@
     fun do_something() { // ничего не возвращает
         print('Hello')
     }
+    fun sort(int[] array): int[] {
+        for int i = 0, i < array.length - 1, i++ {
+            for int j = 0, j < array.length - i - 1, j++ {
+                if array[j] > array[j + 1] {
+                    int temp = array[j]
+                    array[j] = array[j + 1]
+                    array[j + 1] = temp
+                }
+            }
+        }
+        return array
+    }
 
 ### 12. Лямбда выражения
 Чтобы создать лямбда выражения, 
@@ -418,7 +430,7 @@ throw. А если и произошла ошибка срабатывается
     
     fun main() {
         float res1 = calculate(2, 5) // 7
-        float res2 = calculate(2, '*', 5) // 10
+        float res2 = calculate(2, op='*', 5) // 10
     }
     
     fun calculate(float a, str op='+', float b): float {
@@ -967,29 +979,30 @@ throw. А если и произошла ошибка срабатывается
   - r. `lambda`
   - s. `switch`
   - t. `case`
-  - u. `import`
-  - v. `as`
-  - w. `package`
-  - x. `try`
-  - y. `catch`
-  - z. `throw`
-  - aa. `class`
-  - ab. `this`
-  - ac. `gl`
-  - ad. `final`
-  - ae. `static`
-  - af. `new`
-  - ag. `null`
-  - ah. `data`
-  - ai. `exception`
-  - aj. `abstract`
-  - ak. `interface`
-  - al. `enum`
-  - am. `instance_of`
-  - an. `launch`
-  - ao. `async`
-  - ap. `await`
-  - aq. `module`
+  - u. `default`
+  - v. `import`
+  - w. `as`
+  - x. `package`
+  - y. `try`
+  - z. `catch`
+  - aa. `throw`
+  - ab. `class`
+  - ac. `this`
+  - ad. `gl`
+  - ae. `final`
+  - af. `static`
+  - ag. `new`
+  - ah. `null`
+  - ai. `data`
+  - aj. `exception`
+  - ak. `abstract`
+  - al. `interface`
+  - am. `enum`
+  - an. `instance_of`
+  - ao. `launch`
+  - ap. `async`
+  - aq. `await`
+  - ar. `module`
 
 ## Приколы
   - a. Если человек сделал программу 
