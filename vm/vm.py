@@ -1,3 +1,4 @@
+import time
 from pprint import pprint
 import shlex
 import sys
@@ -649,12 +650,29 @@ class LVM:
 
             self.ip = self.labels[label] + 1
 
+        elif op == 'SLEEP':
+            t_val, val = self.stack.pop()
+
+            if t_val != 'int':
+                print(f'Illegal Argument: {val} for SLEEP')
+                exit(1)
+
+            time.sleep(val / 1000)
+
+        elif op == 'DUMP':
+            pprint(f'[IP={self.ip}]: {raw_line.strip()}')
+            pprint(f'[STACK]\n{self.stack}')
+            pprint(f'[VARS]\n{self.vars}')
+            pprint(f'[VARS_STACK]\n{self.vars_stack}')
+            pprint(f'[TRY_STACK]\n{self.try_stack}')
+            pprint(f'[CLASSES]\n{self.classes}')
+
         elif op == 'ARRAY_NEW':
             var_name = instr[1]
             elem_type = instr[2]
             size = int(instr[3])
 
-            default_val = 0 if elem_type in ('int', 'float') else False if elem_type == 'bool' else ''
+            default_val = None
 
             self.vars[var_name] = ('array', [elem_type, [default_val] * size])
 
@@ -790,6 +808,16 @@ class LVM:
 
             self.stack.append(('bool', not val))
 
+        elif op == 'TYPE_OF':
+            target_type = instr[1]
+
+            t_val, val = self.stack.pop()
+
+            if t_val in ('int', 'float', 'bool', 'str', 'lambda'):
+                self.stack.append(('bool', 'true' if t_val == target_type else 'false'))
+            else:
+                self.stack.append(('bool', 'false'))
+
         elif op == 'INSTANCE_OF':
             target_class = instr[1]
             t_obj, obj = self.stack.pop()
@@ -797,6 +825,8 @@ class LVM:
             if t_obj != 'object':
                 print(f'Expected object for INSTANCE_OF, got {t_obj}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
+
+            self.load_class_if_needed(target_class)
 
             if not obj:
                 self.stack.append(('bool', 'false'))
@@ -838,12 +868,9 @@ class LVM:
                 print(f'Expected bool for JUMP_IF_FALSE, got: {t}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            if not cond:
+            if cond == 'false':
                 self.vars_stack.append(self.vars.copy())
                 self.ip = self.labels[label] + 1
-
-        elif op == 'LABEL':
-            return
 
         elif op == 'HALT':
             value = int(instr[1]) if len(instr) > 1 else 0
@@ -868,7 +895,12 @@ class LVM:
 
             sys.exit(value)
 
+        else:
+            print(f'Not a statement: {raw_line}, at {self.path}:{self.ip}')
+            exit(1)
+
 def repl():
+    print('Repl in development. Sorry for that')
     pass
 
 def read(path):
