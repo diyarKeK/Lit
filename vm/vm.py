@@ -11,11 +11,10 @@ class LVM:
         self.classes = {}
         self.class_positions = {}
         self.current_class = None
-        self.frame_stack = [0]
+        self.frame_stack = [{}]
         self.ip = 0
         self.labels = {}
         self.path = path
-        self.scope_stack = [{}]
         self.stack = []
         self.this = None
         self.try_stack = []
@@ -52,7 +51,7 @@ class LVM:
                 continue
 
             instr = self.parse_line(raw_line)
-            op = instr[0]
+            op = instr[0].upper()
 
             if op == 'CLASS':
                 current_class = instr[1]
@@ -81,10 +80,16 @@ class LVM:
                     "static_initialized": False,
                     "static_methods": {},
                     "super_class": super_class,
-                    "interfaces": interfaces
+                    "interfaces": interfaces,
+                    "generics": []
                 }
 
                 self.current_class = current_class
+
+            elif op == 'GENERIC':
+                g_name = instr[1]
+
+                self.classes[self.current_class]["generics"].append(g_name)
 
             elif op == 'FIELD':
                 f_type = instr[1]
@@ -156,7 +161,7 @@ class LVM:
 
         label = self.classes[class_name]["static_init"]
         self.call_stack.append(self.ip)
-        self.scope_stack.append({})
+        self.frame_stack.append({})
         self.classes[class_name]["static_initialized"] = True
         self.ip = self.labels[label] + 1
 
@@ -169,11 +174,14 @@ class LVM:
 
             instr = self.parse_line(raw_line)
             self.execute()
-            if instr[0] == 'RET':
+            if instr[0].upper() == 'RET':
                 break
         else:
             print('To Big Code!!! Your static initializer has more than 1000 line of code!')
             exit(1)
+
+    def current_frame(self):
+        return self.frame_stack[-1]
 
     def parse_line(self, line):
         parts = shlex.split(line.strip())
@@ -187,14 +195,17 @@ class LVM:
             self.execute()
 
     def execute(self):
-        raw_line: str = self.bytecode[self.ip]
+        raw_line: str = self.bytecode[self.ip].strip()
         self.ip += 1
 
-        if not raw_line.strip():
+        if not raw_line:
+            return
+
+        if raw_line.startswith(';') or raw_line.startswith('#'):
             return
 
         instr = self.parse_line(raw_line)
-        op = instr[0]
+        op = instr[0].upper()
 
         if op == 'PUSH_CONST':
             dtype = instr[1]
@@ -231,19 +242,13 @@ class LVM:
 
         elif op in ('ADD_VAR', 'SUB_VAR', 'MUL_VAR', 'DIV_VAR', 'MOD_VAR'):
             var_name = instr[1]
-            found_scope = None
 
-            for scope in reversed(self.scope_stack):
-                if var_name in scope:
-                    found_scope = scope
-                    break
-
-            if not found_scope:
+            if var_name not in self.current_frame():
                 print(f'Undefined variable: {var_name}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             t2, b = self.stack.pop()
-            t1, a = found_scope[var_name]
+            t1, a = self.current_frame()[var_name]
 
             if t1 == 'str':
                 if op != 'ADD_VAR':
@@ -253,7 +258,7 @@ class LVM:
                 if t2 != 'str':
                     b = str(b)
 
-                found_scope[var_name] = ('str', a + b)
+                self.current_frame()[var_name] = ('str', a + b)
 
             else:
                 if t1 not in ('int', 'float') or t2 not in ('int', 'float'):
@@ -278,7 +283,7 @@ class LVM:
                     res = None
 
                 new_type = 'float' if t1 == 'float' or t2 == 'float' else 'int'
-                found_scope[var_name] = (new_type, res)
+                self.current_frame()[var_name] = (new_type, res)
 
         elif op in ('ADD', 'SUB', 'MUL', 'DIV', 'MOD'):
             t2, b = self.stack.pop()
@@ -323,26 +328,16 @@ class LVM:
             var_name = instr[1]
             dtype, value = self.stack.pop()
 
-            frame_start = self.frame_stack[-1]
-
-            for idx in range(len(self.scope_stack) - 1, frame_start - 1, -1):
-                scope = self.scope_stack[idx]
-                if var_name in scope:
-                    scope[var_name] = (dtype, value)
-                    break
-            else:
-                self.scope_stack[-1][var_name] = (dtype, value)
+            self.current_frame()[var_name] = (dtype, value)
 
         elif op == 'LOAD_VAR':
             var_name = instr[1]
 
-            for scope in reversed(self.scope_stack):
-                if var_name in scope:
-                    self.stack.append(scope[var_name])
-                    break
-            else:
+            if var_name not in self.current_frame():
                 print(f'Undefined variable: {var_name}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
+
+            self.stack.append(self.current_frame()[var_name])
 
         elif op == 'PRINT':
             if len(self.stack) > 0:
@@ -403,12 +398,12 @@ class LVM:
                 print(f'Catch label: {catch_label} is not found, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            saved_scope = [scope.copy() for scope in self.scope_stack]
+            saved_frame = [frame.copy() for frame in self.frame_stack]
 
             self.try_stack.append((
                 self.labels[catch_label] + 1,
                 catch_class,
-                saved_scope
+                saved_frame
             ))
 
         elif op == 'END_TRY':
@@ -418,18 +413,6 @@ class LVM:
                 print('END_TRY used without TRY')
                 exit(1)
 
-        elif op == 'ENTER_SCOPE':
-            self.scope_stack.append({})
-
-        elif op == 'EXIT_SCOPE':
-            frame_start = self.frame_stack[-1]
-
-            if len(self.scope_stack) - 1 <= frame_start:
-                print(f'Cannot exit from global scope, at {self.path}:{self.ip}:\n    {raw_line}')
-                exit(1)
-
-            self.scope_stack.pop()
-
         elif op == 'CALL':
             func_name = instr[1]
 
@@ -438,8 +421,7 @@ class LVM:
                 exit(1)
 
             self.call_stack.append(self.ip)
-            self.scope_stack.append({})
-            self.frame_stack.append(len(self.scope_stack) - 1)
+            self.frame_stack.append({})
 
             self.ip = self.labels[func_name] + 1
 
@@ -455,8 +437,7 @@ class LVM:
                 exit(1)
 
             self.call_stack.append(self.ip)
-            self.scope_stack.append({})
-            self.frame_stack.append(len(self.scope_stack) - 1)
+            self.frame_stack.append({})
 
             self.ip = self.labels[label_name] + 1
                 
@@ -465,9 +446,7 @@ class LVM:
                 print(f'RET without calling to him, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            frame_start = self.frame_stack.pop()
-            while len(self.scope_stack) - 1 >= frame_start:
-                self.scope_stack.pop()
+            self.frame_stack.pop()
 
             self.ip = self.call_stack.pop()
 
@@ -488,15 +467,16 @@ class LVM:
             handled = False
 
             while self.try_stack:
-                catch_ip, catch_class, saved_scope = self.try_stack.pop()
+                catch_ip, catch_class, saved_frame = self.try_stack.pop()
 
                 if exception_class == catch_class:
-                    self.scope_stack = [scope.copy() for scope in saved_scope]
+                    self.frame_stack = [frame.copy() for frame in saved_frame]
                     self.ip = catch_ip
                     handled = True
                     break
 
             if handled:
+                self.this = (t_obj, obj)
                 return
 
             print(f'Error at {self.path}:{self.ip}:\n    Exception: {obj["_class"]}\n    Description: {msg}\n    In The Code: {self.path}:{self.ip}')
@@ -520,10 +500,11 @@ class LVM:
             }
 
             self.call_stack.append(self.ip)
-            self.scope_stack.append({})
+            self.frame_stack.append({})
             self.this = ('object', obj)
 
             self.ip = self.labels[init_label] + 1
+
 
         elif op == 'INIT_FIELD':
             field_name = instr[1]
@@ -645,8 +626,7 @@ class LVM:
             label = methods[method_name]
 
             self.call_stack.append(self.ip)
-            self.scope_stack.append({})
-            self.frame_stack.append(len(self.scope_stack) - 1)
+            self.frame_stack.append({})
             self.this = (t_obj, obj)
 
             self.ip = self.labels[label] + 1
@@ -665,8 +645,7 @@ class LVM:
             label = self.classes[class_name]["static_methods"][method_name]
 
             self.call_stack.append(self.ip)
-            self.scope_stack.append({})
-            self.frame_stack.append(len(self.scope_stack) - 1)
+            self.frame_stack.append({})
 
             self.ip = self.labels[label] + 1
 
@@ -690,8 +669,7 @@ class LVM:
             label = self.classes[super_class]["methods"][method_name]
 
             self.call_stack.append(self.ip)
-            self.scope_stack.append({})
-            self.frame_stack.append(len(self.scope_stack) - 1)
+            self.frame_stack.append({})
             self.this = (t_obj, obj)
 
             self.ip = self.labels[label] + 1
@@ -711,11 +689,9 @@ class LVM:
             print('[STACK]')
             pprint(self.stack, indent=2)
 
-            print('[SCOPES]')
-            for scope in self.scope_stack:
-                pprint(scope, indent=2)
-
-            print(f'[FRAME_STACK]\n{self.frame_stack}')
+            print(f'[FRAME_STACK]')
+            for frame in self.frame_stack:
+                pprint(frame, indent=2)
 
             print('[TRY_STACK]')
             pprint(self.try_stack, indent=2)
@@ -937,12 +913,12 @@ class LVM:
             else:
                 print('Stack is empty')
 
-            print('[SCOPES]')
-            if self.scope_stack:
-                for scope in self.scope_stack:
-                    pprint(scope, indent=2)
+            print('[FRAMES]')
+            if self.frame_stack:
+                for frame in self.frame_stack:
+                    pprint(frame, indent=2)
             else:
-                print('Vars_Stack is empty')
+                print('Frames are empty')
 
             sys.exit(value)
 
