@@ -11,18 +11,22 @@ class LVM:
         self.classes = {}
         self.class_positions = {}
         self.current_class = None
+        self.frame_stack = [0]
         self.ip = 0
         self.labels = {}
         self.path = path
+        self.scope_stack = [{}]
         self.stack = []
         self.this = None
         self.try_stack = []
-        self.vars = {}
-        self.vars_stack = []
 
     def collect_labels_and_classes(self):
         for idx, line in enumerate(self.bytecode):
-            parts = line.strip().split(' ')
+            parts = self.parse_line(line)
+
+            if len(parts) == 0:
+                continue
+
             if parts[0] == 'LABEL':
                 label_name = parts[1]
                 self.labels[label_name] = idx
@@ -152,8 +156,7 @@ class LVM:
 
         label = self.classes[class_name]["static_init"]
         self.call_stack.append(self.ip)
-        self.vars_stack.append(self.vars.copy())
-        self.vars = {}
+        self.scope_stack.append({})
         self.classes[class_name]["static_initialized"] = True
         self.ip = self.labels[label] + 1
 
@@ -228,13 +231,19 @@ class LVM:
 
         elif op in ('ADD_VAR', 'SUB_VAR', 'MUL_VAR', 'DIV_VAR', 'MOD_VAR'):
             var_name = instr[1]
+            found_scope = None
 
-            if var_name not in self.vars:
+            for scope in reversed(self.scope_stack):
+                if var_name in scope:
+                    found_scope = scope
+                    break
+
+            if not found_scope:
                 print(f'Undefined variable: {var_name}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             t2, b = self.stack.pop()
-            t1, a = self.vars[var_name]
+            t1, a = found_scope[var_name]
 
             if t1 == 'str':
                 if op != 'ADD_VAR':
@@ -244,7 +253,7 @@ class LVM:
                 if t2 != 'str':
                     b = str(b)
 
-                self.vars[var_name] = ('str', a + b)
+                found_scope[var_name] = ('str', a + b)
 
             else:
                 if t1 not in ('int', 'float') or t2 not in ('int', 'float'):
@@ -269,8 +278,7 @@ class LVM:
                     res = None
 
                 new_type = 'float' if t1 == 'float' or t2 == 'float' else 'int'
-                self.vars[var_name] = (new_type, res)
-
+                found_scope[var_name] = (new_type, res)
 
         elif op in ('ADD', 'SUB', 'MUL', 'DIV', 'MOD'):
             t2, b = self.stack.pop()
@@ -315,16 +323,26 @@ class LVM:
             var_name = instr[1]
             dtype, value = self.stack.pop()
 
-            self.vars[var_name] = (dtype, value)
+            frame_start = self.frame_stack[-1]
+
+            for idx in range(len(self.scope_stack) - 1, frame_start - 1, -1):
+                scope = self.scope_stack[idx]
+                if var_name in scope:
+                    scope[var_name] = (dtype, value)
+                    break
+            else:
+                self.scope_stack[-1][var_name] = (dtype, value)
 
         elif op == 'LOAD_VAR':
             var_name = instr[1]
 
-            if var_name not in self.vars:
+            for scope in reversed(self.scope_stack):
+                if var_name in scope:
+                    self.stack.append(scope[var_name])
+                    break
+            else:
                 print(f'Undefined variable: {var_name}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
-
-            self.stack.append(self.vars[var_name])
 
         elif op == 'PRINT':
             if len(self.stack) > 0:
@@ -335,11 +353,16 @@ class LVM:
             if dtype == 'array':
                 elem_type, data = value
                 print(data)
+
             elif dtype == 'object':
                 if not value:
                     print('null')
                 else:
-                    pprint(value)
+                    pprint(value, indent=2)
+
+            elif dtype == 'bool':
+                print('true' if value else 'false')
+
             else:
                 print(value)
 
@@ -364,7 +387,7 @@ class LVM:
                     exit(1)
 
             elif dtype == 'bool':
-                value = user_input.lower() in ('true', '1', 'yes')
+                value = user_input.lower() in ('true', '1', 'y', 'yes')
             else:
                 value = user_input
 
@@ -380,7 +403,13 @@ class LVM:
                 print(f'Catch label: {catch_label} is not found, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            self.try_stack.append((self.labels[catch_label] + 1, catch_class, self.vars.copy()))
+            saved_scope = [scope.copy() for scope in self.scope_stack]
+
+            self.try_stack.append((
+                self.labels[catch_label] + 1,
+                catch_class,
+                saved_scope
+            ))
 
         elif op == 'END_TRY':
             if self.try_stack:
@@ -388,6 +417,18 @@ class LVM:
             else:
                 print('END_TRY used without TRY')
                 exit(1)
+
+        elif op == 'ENTER_SCOPE':
+            self.scope_stack.append({})
+
+        elif op == 'EXIT_SCOPE':
+            frame_start = self.frame_stack[-1]
+
+            if len(self.scope_stack) - 1 <= frame_start:
+                print(f'Cannot exit from global scope, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+            self.scope_stack.pop()
 
         elif op == 'CALL':
             func_name = instr[1]
@@ -397,7 +438,8 @@ class LVM:
                 exit(1)
 
             self.call_stack.append(self.ip)
-            self.vars_stack.append(self.vars.copy())
+            self.scope_stack.append({})
+            self.frame_stack.append(len(self.scope_stack) - 1)
 
             self.ip = self.labels[func_name] + 1
 
@@ -413,16 +455,20 @@ class LVM:
                 exit(1)
 
             self.call_stack.append(self.ip)
-            self.vars_stack.append(self.vars.copy())
+            self.scope_stack.append({})
+            self.frame_stack.append(len(self.scope_stack) - 1)
 
             self.ip = self.labels[label_name] + 1
                 
         elif op == 'RET':
             if not self.call_stack:
-                print(f'RET without CALL, at {self.path}:{self.ip}:\n    {raw_line}')
+                print(f'RET without calling to him, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            self.vars = self.vars_stack.pop()
+            frame_start = self.frame_stack.pop()
+            while len(self.scope_stack) - 1 >= frame_start:
+                self.scope_stack.pop()
+
             self.ip = self.call_stack.pop()
 
         elif op == 'THROW':
@@ -432,8 +478,8 @@ class LVM:
                 print(f'Expected object for THROW, got {t_obj}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            t_msg, msg = obj["fields"]["description"]
-            if not (t_msg, msg):
+            t_msg, msg = obj["fields"].get("description", (None, None))
+            if not (t_msg and msg):
                 print(f'Class: {obj["_class"]} is not Exception class, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
@@ -442,10 +488,10 @@ class LVM:
             handled = False
 
             while self.try_stack:
-                catch_ip, catch_class, vars_snapshot = self.try_stack.pop()
+                catch_ip, catch_class, saved_scope = self.try_stack.pop()
 
                 if exception_class == catch_class:
-                    self.vars = vars_snapshot
+                    self.scope_stack = [scope.copy() for scope in saved_scope]
                     self.ip = catch_ip
                     handled = True
                     break
@@ -474,7 +520,7 @@ class LVM:
             }
 
             self.call_stack.append(self.ip)
-            self.vars_stack.append(self.vars.copy())
+            self.scope_stack.append({})
             self.this = ('object', obj)
 
             self.ip = self.labels[init_label] + 1
@@ -599,8 +645,8 @@ class LVM:
             label = methods[method_name]
 
             self.call_stack.append(self.ip)
-            self.vars_stack.append(self.vars.copy())
-            ###self.vars = {'this': ('object', obj)}
+            self.scope_stack.append({})
+            self.frame_stack.append(len(self.scope_stack) - 1)
             self.this = (t_obj, obj)
 
             self.ip = self.labels[label] + 1
@@ -619,8 +665,8 @@ class LVM:
             label = self.classes[class_name]["static_methods"][method_name]
 
             self.call_stack.append(self.ip)
-            self.vars_stack.append(self.vars.copy())
-            self.vars = {}
+            self.scope_stack.append({})
+            self.frame_stack.append(len(self.scope_stack) - 1)
 
             self.ip = self.labels[label] + 1
 
@@ -644,8 +690,8 @@ class LVM:
             label = self.classes[super_class]["methods"][method_name]
 
             self.call_stack.append(self.ip)
-            self.vars_stack.append(self.vars.copy())
-            self.vars = {}
+            self.scope_stack.append({})
+            self.frame_stack.append(len(self.scope_stack) - 1)
             self.this = (t_obj, obj)
 
             self.ip = self.labels[label] + 1
@@ -660,26 +706,34 @@ class LVM:
             time.sleep(val / 1000)
 
         elif op == 'DUMP':
-            pprint(f'[IP={self.ip}]: {raw_line.strip()}')
-            pprint(f'[STACK]\n{self.stack}')
-            pprint(f'[VARS]\n{self.vars}')
-            pprint(f'[VARS_STACK]\n{self.vars_stack}')
-            pprint(f'[TRY_STACK]\n{self.try_stack}')
-            pprint(f'[CLASSES]\n{self.classes}')
+            print(f'[IP={self.ip}]: {raw_line.strip()}')
+
+            print('[STACK]')
+            pprint(self.stack, indent=2)
+
+            print('[SCOPES]')
+            for scope in self.scope_stack:
+                pprint(scope, indent=2)
+
+            print(f'[FRAME_STACK]\n{self.frame_stack}')
+
+            print('[TRY_STACK]')
+            pprint(self.try_stack, indent=2)
+
+            print('[CLASSES]')
+            pprint(self.classes, indent=2)
 
         elif op == 'ARRAY_NEW':
-            var_name = instr[1]
-            elem_type = instr[2]
-            size = int(instr[3])
+            elem_type = instr[1]
+            size = int(instr[2])
 
             default_val = None
 
-            self.vars[var_name] = ('array', [elem_type, [default_val] * size])
+            self.stack.append(('array', [elem_type, [default_val] * size]))
 
         elif op == 'ARRAY_INIT':
-            var_name = instr[1]
-            elem_type = instr[2]
-            size = int(instr[3])
+            elem_type = instr[1]
+            size = int(instr[2])
 
             values = []
             for v in instr[4:]:
@@ -693,34 +747,32 @@ class LVM:
                     else:
                         values.append(v.strip('"'))
                 else:
-                    print(f'{var_name} has more elements than his size, at {self.path}:{self.ip}:\n    {raw_line}')
+                    print(f'Found more elements than expected: {len(values)}, at {self.path}:{self.ip}:\n    {raw_line}')
                     exit(1)
 
-            self.vars[var_name] = ('array', [elem_type, values])
+            self.stack.append(('array', [elem_type, values]))
 
         elif op == 'ARRAY_GET':
-            var_name = instr[1]
+            dtype, arr = self.stack.pop()
             t_idx, idx = self.stack.pop()
 
             if t_idx != 'int':
                 print(f'Index must be int, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            dtype, arr = self.vars[var_name]
             if dtype != 'array':
-                print(f'{var_name} is not an array, at {self.path}:{self.ip}:\n    {raw_line}')
+                print(f'Expected array for ARRAY_GET, got {dtype}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             elem_type, data = arr
             if idx < 0 or idx >= len(data):
-                print(f'Index out of range: {var_name}[{idx}] len={len(data)}, at {self.path}:{self.ip}:\n    {raw_line}')
+                print(f'Index out of range: {idx}, length of array: {len(data)}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             self.stack.append((elem_type, data[idx]))
 
         elif op == 'ARRAY_SET':
-            var_name = instr[1]
-
+            dtype, arr = self.stack.pop()
             t_val, val = self.stack.pop()
             t_idx, idx = self.stack.pop()
 
@@ -728,27 +780,26 @@ class LVM:
                 print(f'Index must be int, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            dtype, arr = self.vars[var_name]
             if dtype != 'array':
-                print(f'{var_name} is not array, at {self.path}:{self.ip}:\n    {raw_line}')
+                print(f'Expected array for ARRAY_SET, got {dtype}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             elem_type, data = arr
             if t_val != elem_type:
                 print(f'Type mismatch: expected {elem_type}, got {t_val}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
+
             if idx < 0 or idx >= len(data):
-                print(f'Index out of range: {var_name}[{idx}] = val len={len(data)}, at {self.path}:{self.ip}:\n    {raw_line}')
+                print(f'Index out of range: {idx}, length of array: {len(data)}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             data[idx] = val
 
         elif op == 'ARRAY_LEN':
-            var_name = instr[1]
-            dtype, arr = self.vars[var_name]
+            dtype, arr = self.stack.pop()
 
             if dtype != 'array':
-                print(f'{var_name} is not array, at {self.path}:{self.ip}:\n    {raw_line}')
+                print(f'Expected array for ARRAY_LENGTH, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             elem_type, data = arr
@@ -814,9 +865,9 @@ class LVM:
             t_val, val = self.stack.pop()
 
             if t_val in ('int', 'float', 'bool', 'str', 'lambda'):
-                self.stack.append(('bool', 'true' if t_val == target_type else 'false'))
+                self.stack.append(('bool', True if t_val == target_type else False))
             else:
-                self.stack.append(('bool', 'false'))
+                self.stack.append(('bool', False))
 
         elif op == 'INSTANCE_OF':
             target_class = instr[1]
@@ -829,26 +880,26 @@ class LVM:
             self.load_class_if_needed(target_class)
 
             if not obj:
-                self.stack.append(('bool', 'false'))
+                self.stack.append(('bool', False))
                 return
 
             obj_class = obj["_class"]
 
             if obj_class == target_class:
-                self.stack.append(('bool', 'true'))
+                self.stack.append(('bool', True))
                 return
 
             current = obj_class
             while current:
                 if current == target_class:
-                    self.stack.append(('bool', 'true'))
+                    self.stack.append(('bool', True))
                     return
                 if target_class in self.classes[current]["interfaces"]:
-                    self.stack.append(('bool', 'true'))
+                    self.stack.append(('bool', True))
                     return
                 current = self.classes[current]["super_class"]
 
-            self.stack.append(('bool', 'false'))
+            self.stack.append(('bool', False))
 
         elif op == 'JUMP':
             label = instr[1]
@@ -857,20 +908,25 @@ class LVM:
                 print(f'Cannot find label: {label}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            self.vars_stack.append(self.vars.copy())
             self.ip = self.labels[label] + 1
 
         elif op == 'JUMP_IF_FALSE':
             label = instr[1]
+
+            if label not in self.labels:
+                print(f'Cannot find label: {label}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
 
             t, cond = self.stack.pop()
             if t != 'bool':
                 print(f'Expected bool for JUMP_IF_FALSE, got: {t}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
-            if cond == 'false':
-                self.vars_stack.append(self.vars.copy())
+            if not cond:
                 self.ip = self.labels[label] + 1
+
+        elif op == 'LABEL':
+            return
 
         elif op == 'HALT':
             value = int(instr[1]) if len(instr) > 1 else 0
@@ -881,17 +937,12 @@ class LVM:
             else:
                 print('Stack is empty')
 
-            print('[VARS_STACK]')
-            if self.vars_stack:
-                pprint(self.vars_stack, indent=2)
+            print('[SCOPES]')
+            if self.scope_stack:
+                for scope in self.scope_stack:
+                    pprint(scope, indent=2)
             else:
                 print('Vars_Stack is empty')
-
-            print('[VARS]')
-            if self.vars:
-                pprint(self.vars, indent=2)
-            else:
-                print('Vars is empty')
 
             sys.exit(value)
 
