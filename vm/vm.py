@@ -26,14 +26,16 @@ class LVM:
             if len(parts) == 0:
                 continue
 
-            if parts[0] == 'LABEL':
+            op = parts[0].upper()
+
+            if op == 'LABEL':
                 label_name = parts[1]
                 self.labels[label_name] = idx
-            elif parts[0] == 'CLASS':
+            elif op == 'CLASS':
                 class_name = parts[1]
                 self.class_positions[class_name] = idx
 
-    def load_class_if_needed(self, class_name):
+    def load_class_if_needed(self, class_name, from_class=None):
         if class_name in self.classes:
             return
 
@@ -55,22 +57,6 @@ class LVM:
 
             if op == 'CLASS':
                 current_class = instr[1]
-                if 'EXTENDS' in instr:
-                    index = instr.index('EXTENDS')
-                    super_class = instr[index + 1]
-
-                    self.load_class_if_needed(super_class)
-                else:
-                    super_class = None
-
-                if 'IMPLEMENTS' in instr:
-                    index = instr.index('IMPLEMENTS')
-                    interfaces = [p.strip() for p in instr[index + 1].split(',')]
-
-                    for interface in interfaces:
-                        self.load_class_if_needed(interface)
-                else:
-                    interfaces = []
 
                 self.classes[current_class] = {
                     "fields": {},
@@ -79,12 +65,28 @@ class LVM:
                     "static_init": None,
                     "static_initialized": False,
                     "static_methods": {},
-                    "super_class": super_class,
-                    "interfaces": interfaces,
+                    "super_class": None,
+                    "interfaces": [],
                     "generics": []
                 }
 
                 self.current_class = current_class
+
+            elif op == 'EXTENDS':
+                super_class = instr[1]
+
+                self.load_class_if_needed(super_class, from_class=f'{self.current_class}')
+
+                self.classes[self.current_class]["super_class"] = super_class
+
+            elif op == 'IMPLEMENTS':
+                values = " ".join(instr[1:])
+                interfaces = [p.strip() for p in values.split(',') if p.strip()]
+
+                for interface in interfaces:
+                    self.load_class_if_needed(interface, from_class=f'{self.current_class}')
+
+                self.classes[self.current_class]["interfaces"] = interfaces
 
             elif op == 'GENERIC':
                 g_name = instr[1]
@@ -147,7 +149,7 @@ class LVM:
                     for m_name, m_label in iface["methods"].items():
                         self.classes[self.current_class]["methods"][m_name] = m_label
 
-                self.current_class = None
+                self.current_class = from_class
                 break
             else:
                 print(f'Not Class Instruction: {op}, at {self.path}:{idx}:\n    {raw_line}')
@@ -505,6 +507,40 @@ class LVM:
 
             self.ip = self.labels[init_label] + 1
 
+        elif op == 'NEW_GENERIC_OBJ':
+            class_name = instr[1]
+            init_label = instr[2]
+            generic_args = instr[3:]
+
+            self.load_class_if_needed(class_name)
+
+            class_info = self.classes[class_name]
+            generic_names = class_info["generics"]
+
+            if len(generic_names) != len(generic_args):
+                print(f'Generic argument count mismatch for {class_name}, '
+                      f'expected {len(generic_names)}, got {len(generic_args)}, '
+                      f'at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+            generic_map = dict(zip(generic_names, generic_args))
+
+            field_map = {}
+            for f_name, f_type in class_info["fields"].items():
+                real_type = generic_map.get(f_type, f_type)
+                field_map[f_name] = (real_type, None)
+
+            obj = {
+                "_class": class_name,
+                "_generic_types": generic_map,
+                "fields": field_map
+            }
+
+            self.call_stack.append(self.ip)
+            self.frame_stack.append({})
+            self.this = ('object', obj)
+
+            self.ip = self.labels[init_label] + 1
 
         elif op == 'INIT_FIELD':
             field_name = instr[1]
@@ -701,15 +737,21 @@ class LVM:
 
         elif op == 'ARRAY_NEW':
             elem_type = instr[1]
-            size = int(instr[2])
+            t_size, size = self.stack.pop()
 
-            default_val = None
+            if t_size != 'int':
+                print(f'Expected int for size in ARRAY_INIT, got {t_size}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
 
-            self.stack.append(('array', [elem_type, [default_val] * size]))
+            self.stack.append(('array', [elem_type, [None] * size]))
 
         elif op == 'ARRAY_INIT':
             elem_type = instr[1]
-            size = int(instr[2])
+            t_size, size = self.stack.pop()
+
+            if t_size != 'int':
+                print(f'Expected int for size in ARRAY_INIT, got {t_size}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
 
             values = []
             for v in instr[4:]:
@@ -727,6 +769,29 @@ class LVM:
                     exit(1)
 
             self.stack.append(('array', [elem_type, values]))
+
+        elif op == 'ARRAY_NEW_GENERIC':
+            generic_name = instr[1]
+
+            t_obj, obj = self.stack.pop()
+
+            if t_obj != 'object':
+                print(f'Expected object for ARRAY_NEW_GENERIC, got {t_obj}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+            t_size, size = self.stack.pop()
+
+            if t_size != 'int':
+                print(f'Expected int for size in ARRAY_INIT, got {t_size}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+
+            real_type = obj["_generic_types"].get(generic_name)
+            if not real_type:
+                print(f'Generic: {generic_name} is not found in object: {self.this}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+            self.stack.append(('array', [real_type, [None] * size]))
 
         elif op == 'ARRAY_GET':
             dtype, arr = self.stack.pop()
