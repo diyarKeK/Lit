@@ -357,6 +357,19 @@ class LVM:
                 else:
                     pprint(value, indent=2)
 
+            elif dtype == 'tuple':
+                print('(', end='')
+
+                for i in range(len(value)):
+                    _, v = value[i]
+
+                    if i < len(value) - 1:
+                        print(v, end=', ')
+                    else:
+                        print(v, end='')
+
+                print(')')
+
             elif dtype == 'bool':
                 print('true' if value else 'false')
 
@@ -380,7 +393,7 @@ class LVM:
                 try:
                     value = float(user_input)
                 except ValueError:
-                    print(f'Invalid int input, at {self.path}:{self.ip}:\n    {raw_line}')
+                    print(f'Invalid float input, at {self.path}:{self.ip}:\n    {raw_line}')
                     exit(1)
 
             elif dtype == 'bool':
@@ -442,7 +455,7 @@ class LVM:
             self.frame_stack.append({})
 
             self.ip = self.labels[label_name] + 1
-                
+
         elif op == 'RET':
             if not self.call_stack:
                 print(f'RET without calling to him, at {self.path}:{self.ip}:\n    {raw_line}')
@@ -532,7 +545,7 @@ class LVM:
 
             obj = {
                 "_class": class_name,
-                "_generic_types": generic_map,
+                "generics": generic_map,
                 "fields": field_map
             }
 
@@ -672,7 +685,6 @@ class LVM:
             method_name = instr[2]
 
             self.load_class_if_needed(class_name)
-            self.init_static_fields_if_needed(class_name)
 
             if method_name not in self.classes[class_name]["static_methods"]:
                 print(f'Static method: {method_name} is not found, at {self.path}:{self.ip}:\n    {raw_line}')
@@ -735,7 +747,41 @@ class LVM:
             print('[CLASSES]')
             pprint(self.classes, indent=2)
 
-        elif op == 'ARRAY_NEW':
+        elif op == 'NEW_TUPLE':
+            taking_size = int(instr[1])
+            items = []
+
+            for _ in range(taking_size):
+                items.append(self.stack.pop())
+            items.reverse()
+
+            self.stack.append(('tuple', tuple(items)))
+
+        elif op == 'TUPLE_GET':
+            idx = int(instr[1])
+            dtype, val = self.stack.pop()
+
+            if dtype != 'tuple':
+                print(f'Expected tuple for TUPLE_GET, got {dtype}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+            if idx >= len(val) or idx < 0:
+                print(f'Index out of range: {idx}, length is {len(val)}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+            self.stack.append(val[idx])
+
+        elif op == 'UNPACK_TUPLE':
+            t_items, items = self.stack.pop()
+
+            if t_items != 'tuple':
+                print(f'Cannot unpack not tuple: {t_items}, at {self.path}:{self.ip}:\n    {raw_line}')
+                exit(1)
+
+            for t_val, val in reversed(items):
+                self.stack.append((t_val, val))
+
+        elif op == 'NEW_ARRAY':
             elem_type = instr[1]
             t_size, size = self.stack.pop()
 
@@ -745,7 +791,7 @@ class LVM:
 
             self.stack.append(('array', [elem_type, [None] * size]))
 
-        elif op == 'ARRAY_INIT':
+        elif op == 'INIT_ARRAY':
             elem_type = instr[1]
             t_size, size = self.stack.pop()
 
@@ -770,13 +816,13 @@ class LVM:
 
             self.stack.append(('array', [elem_type, values]))
 
-        elif op == 'ARRAY_NEW_GENERIC':
+        elif op == 'NEW_GENERIC_ARRAY':
             generic_name = instr[1]
 
             t_obj, obj = self.stack.pop()
 
             if t_obj != 'object':
-                print(f'Expected object for ARRAY_NEW_GENERIC, got {t_obj}, at {self.path}:{self.ip}:\n    {raw_line}')
+                print(f'Expected LOAD_THIS before using ARRAY_NEW_GENERIC, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
             t_size, size = self.stack.pop()
@@ -785,13 +831,9 @@ class LVM:
                 print(f'Expected int for size in ARRAY_INIT, got {t_size}, at {self.path}:{self.ip}:\n    {raw_line}')
                 exit(1)
 
+            elem_type = obj["generics"][generic_name]
 
-            real_type = obj["_generic_types"].get(generic_name)
-            if not real_type:
-                print(f'Generic: {generic_name} is not found in object: {self.this}, at {self.path}:{self.ip}:\n    {raw_line}')
-                exit(1)
-
-            self.stack.append(('array', [real_type, [None] * size]))
+            self.stack.append(('array', [elem_type, [None] * size]))
 
         elif op == 'ARRAY_GET':
             dtype, arr = self.stack.pop()

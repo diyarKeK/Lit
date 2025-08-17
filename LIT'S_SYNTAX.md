@@ -662,11 +662,14 @@ throw. А если и произошла ошибка срабатывается
     }
 Выведется: Error At *.lit:18: Something is Wrong
 
-### 22. instance_of
+### 22. instance_of и type_of
 Ключевое слово `instance_of` возвращает
 булевое значение, и определяет,
 был ли заданный объект, объектом 
-заданного класса:
+заданного класса.
+А в свою очередь `type_of` это копия 
+`instance_of`, только работает с 
+примитивными типами.
 
 На примере игры:
 
@@ -723,10 +726,10 @@ throw. А если и произошла ошибка срабатывается
 
           ...
         }
-
-        // а еще можно использовать instance_of с примитивными классами по типу: int, float, bool, str:
+        
+        // type_of
         int a = 0
-        if a instance_of int {
+        if a type_of int {
             print('a is integer!')
         }
     }
@@ -999,10 +1002,11 @@ throw. А если и произошла ошибка срабатывается
   - al. `interface`
   - am. `enum`
   - an. `instance_of`
-  - ao. `launch`
-  - ap. `async`
-  - aq. `await`
-  - ar. `module`
+  - ao. `type_of`
+  - ap. `launch`
+  - aq. `async`
+  - ar. `await`
+  - as. `module`
 
 ## Приколы
   - a. Если человек сделал программу 
