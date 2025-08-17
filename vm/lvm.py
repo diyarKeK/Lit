@@ -1043,7 +1043,7 @@ def read(path):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python vm.py <file.lbc>")
+        print("Usage: python lvm.py <file.lbc>")
         return
 
     if sys.argv[1] == '--repl':

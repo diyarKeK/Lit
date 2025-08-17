@@ -6,6 +6,9 @@ __pycahe__/
 build/
 dist/
 tests/
+target/
+Cargo.lock
+Cargo.toml
 
 temp/
 .vscode/
