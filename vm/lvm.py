@@ -157,7 +157,7 @@ class LVM:
 
             idx += 1
 
-    def init_static_fields_if_needed(self, class_name):
+    def init_static_fields_if_needed(self, class_name, start):
         if not self.classes[class_name]["static_init"] or self.classes[class_name]["static_initialized"]:
             return
 
@@ -175,7 +175,7 @@ class LVM:
                 continue
 
             instr = self.parse_line(raw_line)
-            self.execute()
+            self.execute(start)
             if instr[0].upper() == 'RET':
                 break
         else:
@@ -189,14 +189,14 @@ class LVM:
         parts = shlex.split(line.strip())
         return tuple(parts)
 
-    def run(self):
+    def run(self, start):
         self.collect_labels_and_classes()
         self.ip = self.labels["main"] + 1
 
         while self.ip < len(self.bytecode):
-            self.execute()
+            self.execute(start)
 
-    def execute(self):
+    def execute(self, start):
         raw_line: str = self.bytecode[self.ip].strip()
         self.ip += 1
 
@@ -626,7 +626,7 @@ class LVM:
             t_val, val = self.stack.pop()
 
             self.load_class_if_needed(class_name)
-            self.init_static_fields_if_needed(class_name)
+            self.init_static_fields_if_needed(class_name, start)
 
             if field_name not in self.classes[class_name]["static_fields"]:
                 print(f'Static field: {field_name} is not found, at {self.path}:{self.ip}:\n    {raw_line}')
@@ -644,7 +644,7 @@ class LVM:
             field_name = instr[2]
 
             self.load_class_if_needed(class_name)
-            self.init_static_fields_if_needed(class_name)
+            self.init_static_fields_if_needed(class_name, start)
 
             if field_name not in self.classes[class_name]["static_fields"]:
                 print(f'Static field: {field_name} is not found, at {self.path}:{self.ip}:\n    {raw_line}')
@@ -1027,6 +1027,8 @@ class LVM:
             else:
                 print('Frames are empty')
 
+            dur = time.time() - start
+            print(f'Took: {dur:.3f}s')
             sys.exit(value)
 
         else:
@@ -1058,8 +1060,9 @@ def main():
 
     file = read(lbc_path)
 
+    start = time.time()
     lvm = LVM(file, lbc_path)
-    lvm.run()
+    lvm.run(start)
 
 if __name__ == "__main__":
     main()
