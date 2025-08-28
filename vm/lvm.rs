@@ -29,14 +29,14 @@ impl fmt::Display for HeapValue {
 
 struct LVM {
     call_stack: Vec<usize>,
-    frame_stack: Vec<HashMap<String, i64>>,
-    heap: HashMap<i64, HeapValue>,
+    frame_stack: Vec<HashMap<String, u64>>,
+    heap: HashMap<u64, HeapValue>,
     instructions: Vec<Instruction>,
     ip: usize,
     labels: HashMap<String, usize>,
-    next_heap_id: i64,
+    next_heap_id: u64,
     path: String,
-    stack: Vec<i64>,
+    stack: Vec<u64>,
 }
 
 impl LVM {
@@ -63,30 +63,35 @@ impl LVM {
         h
     }
 
-    fn current_mut_frame(&mut self) -> &mut HashMap<String, i64> {
+    fn current_mut_frame(&mut self) -> &mut HashMap<String, u64> {
         self.frame_stack.last_mut().unwrap()
     }
 
-    fn alloc_heap(&mut self, val: HeapValue) -> i64 {
+    fn alloc_heap(&mut self, val: HeapValue) -> u64 {
         let id = self.next_heap_id;
         self.next_heap_id += 1;
         self.heap.insert(id, val);
         id
     }
-    fn push_i64(&mut self, val: i64) {
+
+    fn push_u64(&mut self, val: u64) {
         self.stack.push(val);
+    }
+
+    fn push_i64(&mut self, val: i64) {
+        self.stack.push(val as u64);
     }
 
     fn push_f64(&mut self, val: f64) {
-        let bits = val.to_bits() as i64;
-        self.push_i64(bits);
+        let bits = val.to_bits();
+        self.push_u64(bits);
     }
 
-    fn push_ref(&mut self, val: i64) {
+    fn push_ref(&mut self, val: u64) {
         self.stack.push(val);
     }
 
-    fn pop_slot(&mut self) -> i64 {
+    fn pop_slot(&mut self) -> u64 {
         match self.stack.pop() {
             Some(v) => v,
             None => panic!("No elements in stack!\nAt {}:{}", self.path, self.ip)
@@ -213,6 +218,11 @@ impl LVM {
                 let val = args[1..].join(" ");
 
                 match dtype {
+                    "unt" => {
+                        let val: u64 = val.parse::<u64>().unwrap();
+                        self.push_u64(val);
+                    }
+
                     "int" => {
                         let val: i64 = val.parse::<i64>().unwrap();
                         self.push_i64(val);
@@ -237,7 +247,7 @@ impl LVM {
                     "lambda" => {
                         let lambda_pos = self.labels.get(&val)
                             .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", val, self.path, line_idx, raw)).clone();
-                        self.stack.push(lambda_pos as i64);
+                        self.push_u64(lambda_pos as u64);
                     }
 
                     _ => {
@@ -246,84 +256,124 @@ impl LVM {
                 }
             },
 
-/* i_inc */ 3066074899 => {
+/* u_inc */ 3504395983 => {
                 let a = self.pop_slot();
-                self.push_i64(a + 1);
+                self.push_u64(a + 1);
+            },
+
+/* u_dec */ 4196425563 => {
+                let a = self.pop_slot();
+                self.push_u64(a - 1);
             }
 
+/* i_inc */ 3066074899 => {
+                let a = self.pop_slot() as i64;
+                self.push_i64(a + 1);
+            },
+
 /* i_dec */ 2261244279 => {
-                let a = self.pop_slot();
+                let a = self.pop_slot() as i64;
                 self.push_i64(a - 1);
             }
 
 /* f_inc */ 3479561274 => {
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let a = f64::from_bits(self.pop_slot());
                 self.push_f64(a + 1.0);
             }
 
 /* f_dec */ 2117118482 => {
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let a = f64::from_bits(self.pop_slot());
                 self.push_f64(a - 1.0);
+            },
+
+/* u_add */ 814136636 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a + b);
+            },
+
+/* u_sub */ 874937213 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a - b);
+            },
+
+/* u_mul */ 629139689 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a * b);
+            },
+
+/* u_div */ 3708006304 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a / b);
+            }
+
+/* u_mod */ 163603499 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a % b);
             }
 
 /* i_add */ 1620772024 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.push_i64(a + b);
             },
 
 /* i_sub */ 660410561 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.push_i64(a - b);
             }
 
 /* i_mul */ 2048868125 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.push_i64(a * b);
             }
 
 /* i_div */ 2176767804 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.push_i64(a / b);
             }
 
 /* i_mod */ 2383434767 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.push_i64(a % b);
             }
 
 /* f_add */ 1471602089 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.push_f64(f64::from_bits(a as u64) + f64::from_bits(b as u64));
+                self.push_f64(f64::from_bits(a) + f64::from_bits(b));
             }
 
 /* f_sub */ 2796889488 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.push_f64(f64::from_bits(a as u64) - f64::from_bits(b as u64));
+                self.push_f64(f64::from_bits(a) - f64::from_bits(b));
             }
 
 /* f_mul */ 1429630668 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.push_f64(f64::from_bits(a as u64) * f64::from_bits(b as u64));
+                self.push_f64(f64::from_bits(a) * f64::from_bits(b));
             }
 
 /* f_div */ 2335815909 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.push_f64(f64::from_bits(a as u64) / f64::from_bits(b as u64));
+                self.push_f64(f64::from_bits(a) / f64::from_bits(b));
             }
 
 /* f_mod */ 1358974598 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.push_f64(f64::from_bits(a as u64) % f64::from_bits(b as u64));
+                self.push_f64(f64::from_bits(a) % f64::from_bits(b));
             }
 
 /* store_var */533751560 => {
@@ -355,8 +405,9 @@ impl LVM {
                 if self.stack.len() != 0 {
                     let val = self.pop_slot();
                     match args[0].as_str() {
-                        "int" => println!("{}", val),
-                        "float" => println!("{}", f64::from_bits(val as u64)),
+                        "unt" => println!("{}", val),
+                        "int" => println!("{}", val as i64),
+                        "float" => println!("{}", f64::from_bits(val)),
                         "str" => {
                             if let Some(HeapValue::Str(s)) = self.heap.get(&val) {
                                 println!("{}", s);
@@ -386,6 +437,10 @@ impl LVM {
                 let input = input.trim();
 
                 match required_type.as_str() {
+                    "unt" => {
+                        let val = input.parse::<u64>().unwrap();
+                        self.push_u64(val);
+                    }
                     "int" => {
                         let val = input.parse::<i64>().unwrap();
                         self.push_i64(val);
@@ -437,78 +492,114 @@ impl LVM {
 
 /* sleep */ 2313861896 => {
                 let time = self.pop_slot();
-                thread::sleep(Duration::from_millis(time as u64));
+                thread::sleep(Duration::from_millis(time));
             }
 
-/* i_eq */  3360026535 => {
+/* u_eq */  3848242203 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
+                self.stack.push(if a == b { 1 } else { 0 });
+            },
+
+/* u_neq */ 1377440367 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.stack.push(if a != b { 1 } else { 0 });
+            },
+
+/* u_lt */  3729666037 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.stack.push(if a < b { 1 } else { 0 });
+            },
+
+/* u_gt*/   3965979726 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.stack.push(if a > b { 1 } else { 0 });
+            },
+
+/* u_lte */ 2232737712 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.stack.push(if a <= b { 1 } else { 0 });
+            },
+
+/* u_gte */ 1283401649 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.stack.push(if a >= b { 1 } else { 0 });
+            },
+
+/* i_eq */  3360026535 => {
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.stack.push(if a == b { 1 } else { 0 });
             }
 
 /* i_neq */ 3473496443 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.stack.push(if a != b { 1 } else { 0 });
             }
 
 /* i_lt */  3109892441 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.stack.push(if a < b { 1 } else { 0 });
             }
 
 /* i_gt */  3075204370 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.stack.push(if a > b { 1 } else { 0 });
             }
 
 /* i_lte */ 162824564 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.stack.push(if a <= b { 1 } else { 0 });
             }
 
 /* i_gte */ 58341973 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
                 self.stack.push(if a >= b { 1 } else { 0 });
             }
 
 /* f_eq */  3248363596 => {
-                let b = f64::from_bits(self.pop_slot() as u64);
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let b = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot());
                 self.stack.push(if a == b { 1 } else { 0 });
             }
 
 /* f_neq */ 371414550 => {
-                let b = f64::from_bits(self.pop_slot() as u64);
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let b = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot());
                 self.stack.push(if a != b { 1 } else { 0 });
             }
 
 /* f_lt */  3501160714 => {
-                let b = f64::from_bits(self.pop_slot() as u64);
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let b = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot());
                 self.stack.push(if a < b { 1 } else { 0 });
             }
 
 /* f_gt */  3533288929 => {
-                let b = f64::from_bits(self.pop_slot() as u64);
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let b = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot());
                 self.stack.push(if a > b { 1 } else { 0 });
             }
 
 /* f_lte */ 4080806333 => {
-                let b = f64::from_bits(self.pop_slot() as u64);
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let b = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot());
                 self.stack.push(if a <= b { 1 } else { 0 });
             }
 
 /* f_gte */ 200851148 => {
-                let b = f64::from_bits(self.pop_slot() as u64);
-                let a = f64::from_bits(self.pop_slot() as u64);
+                let b = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot());
                 self.stack.push(if a >= b { 1 } else { 0 });
             }
 
