@@ -84,15 +84,15 @@ impl LVM {
         h
     }
 
-    fn current_mut_frame(&mut self) -> &mut HashMap<String, u64> {
-        self.frame_stack.last_mut().unwrap()
-    }
-
     fn alloc_heap(&mut self, val: HeapValue) -> u64 {
         let id = self.next_heap_id;
         self.next_heap_id += 1;
         self.heap.insert(id, val);
         id
+    }
+
+    fn current_mut_frame(&mut self) -> &mut HashMap<String, u64> {
+        self.frame_stack.last_mut().unwrap()
     }
 
     fn push_u64(&mut self, val: u64) {
@@ -210,7 +210,7 @@ impl LVM {
                 }
 
                 self.labels.insert(name, idx);
-            } else if instr.op == 2872970239 {
+/* CLASS */ } else if instr.op == 2872970239 {
 
                 if instr.args.len() != 1 {
                     panic!("At {}:{}:\n    {}\nclass expects 1 argument;\nUsage: class <name>", self.path, idx, instr.raw)
@@ -260,7 +260,7 @@ impl LVM {
                 },
 
 /* field */     1736598119 => {
-                    if args.len() != 2 {
+                    if args.len() != 1 {
                         panic!("At {}:{}:\n    {}\nfield requires 1 argument;\nUsage: field <name>", self.path, idx, raw)
                     }
 
@@ -532,10 +532,37 @@ impl LVM {
 
                 let val = {
                     let frame = self.frame_stack.last().unwrap();
-                    frame.get(&name).unwrap_or_else(|| panic!("Undefined variable {}, at {}:{}:\n    {}", name, self.path, line_idx, raw)).clone()
+                    frame.get(&name).unwrap_or_else(|| panic!("Undefined variable: {}, at {}:{}:\n    {}", name, self.path, line_idx, raw)).clone()
                 };
                 self.stack.push(val);
             }
+
+/* free */  2578706139 => {
+
+                if args.len() != 1 {
+                    panic!("At {}:{}:\n    {}\nfree requires 1 argument;\nUsage: free <name>", self.path, line_idx, raw);
+                }
+
+                let name = args[0].clone();
+
+                if let Some(obj_ref) = self.current_mut_frame().remove(&name) {
+                    self.heap.remove(&obj_ref);
+                } else {
+                    panic!("Undefined variable: {}, at {}:{}:\n    {}", name, self.path, line_idx, raw);
+                }
+            }
+
+/* clone */ 730356610 => {
+                let reference = self.pop_slot();
+
+                if let Some(obj) = self.heap.get(&reference) {
+
+                    let new_id = self.alloc_heap(obj.clone());
+                    self.push_ref(new_id);
+                } else {
+                    panic!("Cannot found reference: {} in heap, at {}:{}:\n    {}", reference, self.path, line_idx, raw);
+                }
+            },
 
 /* print */ 372738696 => {
                 if self.stack.len() != 0 {
