@@ -17,12 +17,14 @@ struct Instruction {
 #[derive(Debug, Clone)]
 enum HeapValue {
     Str(String),
+    Array(Box<[u64]>),
 }
 
 impl fmt::Display for HeapValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             HeapValue::Str(s) => write!(f, "{}", s),
+            HeapValue::Array(v) => write!(f, "{:?}", v),
         }
     }
 }
@@ -91,10 +93,10 @@ impl LVM {
         self.stack.push(val);
     }
 
-    fn pop_slot(&mut self) -> u64 {
+    fn pop_slot(&mut self, raw: &String) -> u64 {
         match self.stack.pop() {
             Some(v) => v,
-            None => panic!("No elements in stack!\nAt {}:{}", self.path, self.ip)
+            None => panic!("No elements in stack!\nAt {}:{}:\n    {}", self.path, self.ip, raw)
         }
     }
 
@@ -178,13 +180,17 @@ impl LVM {
     fn collect_labels(&mut self, instructions: &Vec<Instruction>) {
         for (idx, instr) in instructions.iter().enumerate() {
 /* LABEL */ if instr.op == 4137097213 {
+
                 if instr.args.len() != 1 {
                     panic!("At {}:{}:\n    {}\nlabel expects 1 argument;\nUsage: label <name>", self.path, idx, instr.raw)
                 }
+
                 let name = instr.args[0].clone();
+
                 if self.labels.contains_key(&name) {
-                    panic!("label \"{}\" already defined, at {}:{}:\n    {}", name, self.path, idx, instr.raw)
+                    panic!("Label: \"{}\" already defined, at {}:{}:\n    {}", name, self.path, idx, instr.raw)
                 }
+
                 self.labels.insert(name, idx);
             }
         }
@@ -215,25 +221,26 @@ impl LVM {
                 }
 
                 let dtype = args[0].as_str();
+                let hash_type = LVM::opcode_hash(dtype);
                 let val = args[1..].join(" ");
 
-                match dtype {
-                    "unt" => {
+                match hash_type {
+            /* unt */1255446122 => {
                         let val: u64 = val.parse::<u64>().unwrap();
                         self.push_u64(val);
                     }
 
-                    "int" => {
+            /* int */2515107422 => {
                         let val: i64 = val.parse::<i64>().unwrap();
                         self.push_i64(val);
                     }
 
-                    "float" => {
+            /* float */2797886853 => {
                         let val: f64 = val.parse::<f64>().unwrap();
                         self.push_f64(val);
                     }
 
-                    "str" => {
+            /* str */3259748752 => {
                         let s = if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
                             val[1..(val.len() - 1)].to_string()
                         } else {
@@ -244,7 +251,7 @@ impl LVM {
                         self.push_ref(id);
                     }
 
-                    "lambda" => {
+            /* lambda */2131063274 => {
                         let lambda_pos = self.labels.get(&val)
                             .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", val, self.path, line_idx, raw)).clone();
                         self.push_u64(lambda_pos as u64);
@@ -257,123 +264,151 @@ impl LVM {
             },
 
 /* u_inc */ 3504395983 => {
-                let a = self.pop_slot();
+                let a = self.pop_slot(&raw);
                 self.push_u64(a + 1);
             },
 
 /* u_dec */ 4196425563 => {
-                let a = self.pop_slot();
+                let a = self.pop_slot(&raw);
                 self.push_u64(a - 1);
             }
 
 /* i_inc */ 3066074899 => {
-                let a = self.pop_slot() as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.push_i64(a + 1);
             },
 
 /* i_dec */ 2261244279 => {
-                let a = self.pop_slot() as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.push_i64(a - 1);
             }
 
 /* f_inc */ 3479561274 => {
-                let a = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.push_f64(a + 1.0);
             }
 
 /* f_dec */ 2117118482 => {
-                let a = f64::from_bits(self.pop_slot());
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.push_f64(a - 1.0);
             },
 
 /* u_add */ 814136636 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_u64(a + b);
             },
 
 /* u_sub */ 874937213 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_u64(a - b);
             },
 
 /* u_mul */ 629139689 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_u64(a * b);
             },
 
 /* u_div */ 3708006304 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_u64(a / b);
             }
 
 /* u_mod */ 163603499 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_u64(a % b);
             }
 
 /* i_add */ 1620772024 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.push_i64(a + b);
             },
 
 /* i_sub */ 660410561 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.push_i64(a - b);
             }
 
 /* i_mul */ 2048868125 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.push_i64(a * b);
             }
 
 /* i_div */ 2176767804 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.push_i64(a / b);
             }
 
 /* i_mod */ 2383434767 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.push_i64(a % b);
             }
 
 /* f_add */ 1471602089 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_f64(f64::from_bits(a) + f64::from_bits(b));
             }
 
 /* f_sub */ 2796889488 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_f64(f64::from_bits(a) - f64::from_bits(b));
             }
 
 /* f_mul */ 1429630668 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_f64(f64::from_bits(a) * f64::from_bits(b));
             }
 
 /* f_div */ 2335815909 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_f64(f64::from_bits(a) / f64::from_bits(b));
             }
 
 /* f_mod */ 1358974598 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.push_f64(f64::from_bits(a) % f64::from_bits(b));
+            }
+
+/* cast */  2854572110 => {
+                if args.len() != 2 {
+                    panic!("At {}:{}:\n    {}\ncast requires 1 argument;\nUsage: cast <from_type> <to_type>", self.path, line_idx, raw);
+                }
+                let val = self.pop_slot(&raw);
+                let from = args.get(0).map(|s| s.as_str()).unwrap_or("");
+                let to   = args.get(1).map(|s| s.as_str()).unwrap_or("");
+
+                let hashed_from = LVM::opcode_hash(from);
+                let hashed_to = LVM::opcode_hash(to);
+
+                let casted = match (hashed_from, hashed_to) {
+    /* unt - int */ (1255446122, 2515107422)   => val as i64 as u64,
+    /* unt - float */(1255446122, 2797886853) => (val as f64).to_bits(),
+
+    /* int - unt */ (2515107422, 1255446122)   => val as i64 as u64,
+    /* int - float */(2515107422, 2797886853) => (val as i64 as f64).to_bits(),
+
+    /* float - int */(2797886853, 2515107422)   => (f64::from_bits(val).trunc() as i64) as u64,
+    /* float - unt */(2797886853, 1255446122)   => f64::from_bits(val).trunc() as u64,
+
+                    _ => panic!("Unsupported cast: {} -> {}, at {}:{}:\n    {}",
+                                from, to, self.path, line_idx, raw),
+                };
+
+                self.push_u64(casted);
             }
 
 /* store_var */533751560 => {
@@ -382,7 +417,7 @@ impl LVM {
                 }
 
                 let name = args[0].clone();
-                let val = self.pop_slot();
+                let val = self.pop_slot(&raw);
 
                 self.current_mut_frame().insert(name, val);
             }
@@ -403,18 +438,33 @@ impl LVM {
 
 /* print */ 372738696 => {
                 if self.stack.len() != 0 {
-                    let val = self.pop_slot();
-                    match args[0].as_str() {
-                        "unt" => println!("{}", val),
-                        "int" => println!("{}", val as i64),
-                        "float" => println!("{}", f64::from_bits(val)),
-                        "str" => {
+
+                    if args.len() != 1 {
+                        panic!("At {}:{}:\n    {}print requires 1 argument due to stack is not empty;\nUsage: print <type>", self.path, line_idx, raw);
+                    }
+
+                    let val = self.pop_slot(&raw);
+                    let dtype = &args[0];
+                    let hashed_type = LVM::opcode_hash(dtype);
+
+                    match hashed_type {
+                /* unt */1255446122 => println!("{}", val),
+                /* int */2515107422 => println!("{}", val as i64),
+                /* float */2797886853 => println!("{}", f64::from_bits(val)),
+                /* str */3259748752 => {
                             if let Some(HeapValue::Str(s)) = self.heap.get(&val) {
                                 println!("{}", s);
                             } else {
-                                panic!("Invalid heap reference: {}, at {}:{}:\n    {}", val, self.path, line_idx, raw);
+                                panic!("Cannot found str reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw);
                             }
-                        }
+                        },
+                /* array */2321067302 => {
+                            if let Some(HeapValue::Array(arr)) = self.heap.get(&val) {
+                                println!("{:?}", arr);
+                            } else {
+                                panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw);
+                            }
+                        },
                         _ => panic!("Unknown type: {}, at {}:{}:\n    {}", args[0], self.path, line_idx, raw)
                     }
                 } else {
@@ -428,6 +478,7 @@ impl LVM {
                 }
 
                 let required_type = &args[0];
+                let required_type_hash = LVM::opcode_hash(required_type);
 
                 let mut input = String::new();
                 io::stdin()
@@ -436,20 +487,20 @@ impl LVM {
 
                 let input = input.trim();
 
-                match required_type.as_str() {
-                    "unt" => {
+                match required_type_hash {
+            /* unt */1255446122 => {
                         let val = input.parse::<u64>().unwrap();
                         self.push_u64(val);
-                    }
-                    "int" => {
+                    },
+            /* int */2515107422 => {
                         let val = input.parse::<i64>().unwrap();
                         self.push_i64(val);
                     },
-                    "float" => {
+            /* float */2797886853 => {
                         let val = input.parse::<f64>().unwrap();
                         self.push_f64(val);
                     },
-                    "str" => {
+            /* str */3259748752 => {
                         let id = self.alloc_heap(HeapValue::Str(input.to_string()));
                         self.push_ref(id);
                     },
@@ -474,7 +525,7 @@ impl LVM {
             }
 
 /* call_dynamic */4082794239 => {
-                let lambdas_pos = self.pop_slot() as usize;
+                let lambdas_pos = self.pop_slot(&raw) as usize;
 
                 self.call_stack.push(self.ip);
                 self.frame_stack.push(HashMap::new());
@@ -491,132 +542,185 @@ impl LVM {
             }
 
 /* sleep */ 2313861896 => {
-                let time = self.pop_slot();
+                let time = self.pop_slot(&raw);
                 thread::sleep(Duration::from_millis(time));
             }
 
+/* new_array */3719752907 => {
+                let len = self.pop_slot(&raw);
+
+                let arr = vec![0u64; len as usize].into_boxed_slice();
+                let id = self.alloc_heap(HeapValue::Array(arr));
+                self.push_ref(id);
+            }
+
+/* array_set */1287122249 => {
+                let arr_ref = self.pop_slot(&raw);
+                let idx = self.pop_slot(&raw) as usize;
+                let val = self.pop_slot(&raw);
+
+                if let Some(HeapValue::Array(arr)) = self.heap.get_mut(&arr_ref) {
+
+                    if idx >= arr.len() {
+                        panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, arr.len(), raw, line_idx, raw);
+                    }
+
+                    arr[idx] = val;
+                } else {
+                    panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw);
+                }
+            },
+
+/* array_get */3467232181 => {
+                let arr_ref = self.pop_slot(&raw);
+                let idx = self.pop_slot(&raw) as usize;
+
+                if let Some(HeapValue::Array(arr)) = self.heap.get(&arr_ref) {
+
+                    if idx >= arr.len() {
+                        panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, arr.len(), raw, line_idx, raw);
+                    }
+
+                    let val = arr[idx];
+                    self.push_u64(val);
+                } else {
+                    panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw);
+                }
+            }
+
+/* array_len */3246697146 => {
+                let arr_ref = self.pop_slot(&raw);
+
+                if let Some(HeapValue::Array(arr)) = self.heap.get(&arr_ref) {
+                    let length = arr.len() as u64;
+                    self.push_u64(length);
+                } else {
+                    panic!("Cannot found array reference: {} in heap, at {}:{}:\n     {}", arr_ref, self.path, line_idx, raw);
+                }
+            }
+
 /* u_eq */  3848242203 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a == b { 1 } else { 0 });
             },
 
 /* u_neq */ 1377440367 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a != b { 1 } else { 0 });
             },
 
 /* u_lt */  3729666037 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a < b { 1 } else { 0 });
             },
 
 /* u_gt*/   3965979726 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a > b { 1 } else { 0 });
             },
 
 /* u_lte */ 2232737712 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a <= b { 1 } else { 0 });
             },
 
 /* u_gte */ 1283401649 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a >= b { 1 } else { 0 });
             },
 
 /* i_eq */  3360026535 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.stack.push(if a == b { 1 } else { 0 });
             }
 
 /* i_neq */ 3473496443 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.stack.push(if a != b { 1 } else { 0 });
             }
 
 /* i_lt */  3109892441 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.stack.push(if a < b { 1 } else { 0 });
             }
 
 /* i_gt */  3075204370 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.stack.push(if a > b { 1 } else { 0 });
             }
 
 /* i_lte */ 162824564 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.stack.push(if a <= b { 1 } else { 0 });
             }
 
 /* i_gte */ 58341973 => {
-                let b = self.pop_slot() as i64;
-                let a = self.pop_slot() as i64;
+                let b = self.pop_slot(&raw) as i64;
+                let a = self.pop_slot(&raw) as i64;
                 self.stack.push(if a >= b { 1 } else { 0 });
             }
 
 /* f_eq */  3248363596 => {
-                let b = f64::from_bits(self.pop_slot());
-                let a = f64::from_bits(self.pop_slot());
+                let b = f64::from_bits(self.pop_slot(&raw));
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.stack.push(if a == b { 1 } else { 0 });
             }
 
 /* f_neq */ 371414550 => {
-                let b = f64::from_bits(self.pop_slot());
-                let a = f64::from_bits(self.pop_slot());
+                let b = f64::from_bits(self.pop_slot(&raw));
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.stack.push(if a != b { 1 } else { 0 });
             }
 
 /* f_lt */  3501160714 => {
-                let b = f64::from_bits(self.pop_slot());
-                let a = f64::from_bits(self.pop_slot());
+                let b = f64::from_bits(self.pop_slot(&raw));
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.stack.push(if a < b { 1 } else { 0 });
             }
 
 /* f_gt */  3533288929 => {
-                let b = f64::from_bits(self.pop_slot());
-                let a = f64::from_bits(self.pop_slot());
+                let b = f64::from_bits(self.pop_slot(&raw));
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.stack.push(if a > b { 1 } else { 0 });
             }
 
 /* f_lte */ 4080806333 => {
-                let b = f64::from_bits(self.pop_slot());
-                let a = f64::from_bits(self.pop_slot());
+                let b = f64::from_bits(self.pop_slot(&raw));
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.stack.push(if a <= b { 1 } else { 0 });
             }
 
 /* f_gte */ 200851148 => {
-                let b = f64::from_bits(self.pop_slot());
-                let a = f64::from_bits(self.pop_slot());
+                let b = f64::from_bits(self.pop_slot(&raw));
+                let a = f64::from_bits(self.pop_slot(&raw));
                 self.stack.push(if a >= b { 1 } else { 0 });
             }
 
 /* and */   254395046 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a == 1 && b == 1 { 1 } else { 0 })
             }
 
 /* or */    1563699588 => {
-                let b = self.pop_slot();
-                let a = self.pop_slot();
+                let b = self.pop_slot(&raw);
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a == 1 || b == 1 { 1 } else { 0 })
             }
 
 /* not */   699505802 => {
-                let a = self.pop_slot();
+                let a = self.pop_slot(&raw);
                 self.stack.push(if a != 1 { 1 } else { 0 });
             }
 
@@ -636,7 +740,7 @@ impl LVM {
                     panic!("At {}:{}:\n    {}\njump_if_false requires 1 argument;\nUsage: jump_if_false <label>", self.path, line_idx, raw);
                 }
 
-                let cond = self.pop_slot();
+                let cond = self.pop_slot(&raw);
 
                 if cond != 1 {
                     let label_name = &args[0];
@@ -651,7 +755,7 @@ impl LVM {
                     panic!("At {}:{}:\n    {}\njump_if_true requires 1 argument;\nUsage: jump_if_true <label>", self.path, line_idx, raw);
                 }
 
-                let cond = self.pop_slot();
+                let cond = self.pop_slot(&raw);
                 if cond == 1 {
                     let label_name = &args[0];
                     self.ip = self.labels.get(label_name)
