@@ -110,8 +110,17 @@
             print('Else Block')
     }
 
-### 6. Очистка памяти
-У `Lit` есть свой сборщик мусора (`GC`), чтобы программисты не морочили голову над очисткой памяти
+### 6. Касты чисел
+Чтобы превратить unt в int, используйте
+ключевое слово `like`:
+
+    fun main() {
+        int some = -1
+        unt index = some like unt
+
+        print(index) // 18_446_744_073_709_551_615
+    }
+
 
 ### 7. Работа с input()
 Чтобы принять данные из вне, 
@@ -266,7 +275,7 @@
 Чтобы сделать `Switch-case` конструкцию 
 укажите ключевое слово switch, дальше
 переменную которую будем проверять, 
-дальше `case'ы`:
+дальше `кейсы`:
 
     fun main() {
         str name = 'Alex'
@@ -951,41 +960,42 @@ throw. А если и произошла ошибка срабатывается
   - i. `and`
   - j. `or`
   - k. `not`
-  - l. `while`
-  - m. `for`
-  - n. `break`
-  - o. `continue`
-  - p. `in`
-  - q. `fun`
-  - r. `return`
-  - s. `lambda`
-  - t. `switch`
-  - u. `default`
-  - v. `import`
-  - w. `as`
-  - x. `package`
-  - y. `try`
-  - z. `catch`
-  - aa. `throw`
-  - ab. `class`
-  - ac. `this`
-  - ad. `gl`
-  - ae. `static`
-  - af. `final`
-  - ag. `new`
-  - ah. `data`
-  - ai. `exception`
-  - aj. `abstract`
-  - ak. `interface`
-  - al. `enum`
-  - am. `null`
-  - an. `with`
-  - ao. `chain`
-  - ap. `instance_of`
-  - aq. `launch`
-  - ar. `async`
-  - as. `await`
-  - at. `module`
+  - l. `like`
+  - m. `while`
+  - n. `for`
+  - o. `break`
+  - p. `continue`
+  - q. `in`
+  - r. `fun`
+  - s. `return`
+  - t. `lambda`
+  - u. `switch`
+  - v. `default`
+  - w. `import`
+  - x. `as`
+  - y. `package`
+  - z. `try`
+  - aa. `catch`
+  - ab. `throw`
+  - ac. `class`
+  - ad. `this`
+  - ae. `gl`
+  - af. `static`
+  - ag. `final`
+  - ah. `new`
+  - ai. `data`
+  - aj. `exception`
+  - ak. `abstract`
+  - al. `interface`
+  - am. `enum`
+  - an. `null`
+  - ao. `with`
+  - ap. `chain`
+  - aq. `instance_of`
+  - ar. `launch`
+  - as. `async`
+  - at. `await`
+  - au. `module`
 
 ## Приколы
   - a. Если человек сделал программу 
