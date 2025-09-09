@@ -271,8 +271,8 @@
     fun main() {
         str name = 'Alex'
         switch name {
-            'David' => print('Name is David')
-            'Alex' => print('Name is Alex')
+            'David' => print('Name is David'),
+            'Alex' => print('Name is Alex'),
             default => print('Name is Unknown')
         }
     }
@@ -286,8 +286,8 @@
     
     fun getIdByCase(str name): int {
         return switch name {
-            'David' => 1
-            'Alex' => 2
+            'David' => 1,
+            'Alex' => 2,
             default => 0 // Обязательно default
         }
     }
@@ -381,12 +381,12 @@ throw. А если и произошла ошибка срабатывается
             return -1.0
         
         return switch op {
-            '+' -> a + b
-            '-' -> a - b
-            '*' -> a * b
-            '/' -> a / b
-            '%' -> a % b
-            '^' -> Math.pow(a, b)
+            '+' -> a + b,
+            '-' -> a - b,
+            '*' -> a * b,
+            '/' -> a / b,
+            '%' -> a % b,
+            '^' -> Math.pow(a, b),
             default -> throw new RE('Unknown operation: {op}')
         }
     }
@@ -436,6 +436,19 @@ throw. А если и произошла ошибка срабатывается
         }
     }
 
+Чтобы создать поле или метод, которые принадлежат классу 
+используйте `static`:
+
+    class MyClass {
+
+        gl static str shared = 'Hello from static!'
+
+        static fun print_shared() {
+            print(MyClass::shared)
+        }
+
+    }
+
 Чтобы создать не изменяемое поле, 
 укажите ключевое слово `final`:
     
@@ -448,51 +461,31 @@ throw. А если и произошла ошибка срабатывается
 ### 18. Использование класса:
 
     class User {
-        gl final int id
+        gl static unt count = 0
+        gl final unt id
         gl str name
         
         User(str name) {
             this.id = count
             this.name = name
+            User::count++
+        }
+
+        static fun is_David(User user): bool {
+            return user.name == 'David'
         }
     }
 
     fun main() {
         // Чтобы сделать объект класса, укажите ключевое слово 'new':
-        User example = new User('Mark')
+        User user = new User('Mark')
+
+        bool isDavid = User::is_David(user)
     }
 
-### 19. Защита от NullPointer
-Как мы знаем, экземпляры классов 
-могут быть `null`. Чтобы защитится от 
-`null`, можно указать, что `null` будет 
-заменяться на дефолтное значение:
 
-    gl null = (дефолтное значение)
 
-Повторюсь это опционально. Можно 
-не писать эту строчку кода, если не
-хотите защиты от `NullPointer`
-    
-    class User {
-        gl str name
-        
-        gl null = new User('Guest')
-      
-        User(str name) {
-            this.name = name
-        }
-    }
-    
-    fun main() {
-        User user = null
-        print(user.name) // Guest
-      
-        // можно также его использовать:
-        print(User.null.name) // Guest
-    }
-
-### 20. abstract, interface, data, enum, exception классы
+### 19. abstract, interface, data, enum, exception классы
 Чтобы объявить `abstract` класс, 
 укажите ключевое слово `abstract`:
     
@@ -543,17 +536,38 @@ throw. А если и произошла ошибка срабатывается
     data Product(str name, float price)
 
 Чтобы сделать класс перечисления, 
-укажите ключевое слово `enum`:
+используйте `enum` классы:
 
     enum Weapon {
         SWORD,
         BOW
     }
-    
+
     enum Role {
         USER,
         VIP,
         ADMIN
+    }
+
+Также, в самих значения `enum` класса 
+можно хранить аргументы: 
+
+    enum Number {
+        Unt(unt),
+        Int(int),
+        Float(float)
+        Infinity
+    }
+
+    fun main() {
+        Number num = Number::Unt(2)
+
+        switch (num) {
+            Number::Unt(u) => print(u),
+            Number::Int(i) => print(i),
+            Number::Float(f) => print(f),
+            Number::Infinity => print('Infinity')
+        }
     }
 
 `Exception` классы, это классы 
@@ -580,7 +594,33 @@ throw. А если и произошла ошибка срабатывается
 
         throw new MyException('Something is Wrong') 
     }
-Выведется: Error At *.lit:18: Something is Wrong
+`Выведется: Error At *.lit:18: Something is Wrong`
+
+### 20. Защита от NullPointer
+Как мы знаем, экземпляры классов
+могут быть `null`. Чтобы защитится от
+`null`, можно использовать ключевые слова
+`chain` и `with`:
+
+    import util.List
+
+    data Skill(str skill)
+    data Project(str name, List<Skill> new_skills, str experience)
+    data Portfolio(List<Project> projects)
+    data User(str name, Portfolio portfolio)
+    
+    fun main() {
+        User user = null
+        with user.portfolio.projects[-1].experience as xp {
+            print(xp)
+        }
+        
+        /* ИЛИ */
+        
+        print(chain user.portfolio.projects[-1].new_skills[-1].skill)
+        // и теперь если какое-то поле (смотри выше) окажеться null,
+        // то chain остановит цепочку не дав ошибку: NullReferenceException
+    }
 
 ### 21. instance_of
 Ключевое слово `instance_of` возвращает
@@ -636,10 +676,10 @@ throw. А если и произошла ошибка срабатывается
         Particle particle = new Particle(...)
         Entity entity = new ParticleEntity(particle, 1)
 
-        if entity instance_of ItemEntity { // false
+        if entity instance_of ItemEntity item_entity { // false
 
           ...
-        } else if entity instance_of ParticleEntity { // true
+        } else if entity instance_of ParticleEntity particle_entity { // true
 
           ...
         }
@@ -767,7 +807,7 @@ throw. А если и произошла ошибка срабатывается
     async fun fetch_data(): str {
         Response response = await fetch('https://example.com/data', HttpMethod.GET)
         delay(1000)
-        return 'Data has been uploaded'
+        return 'Data has been received'
     }
     
     fun main() {
@@ -779,7 +819,7 @@ throw. А если и произошла ошибка срабатывается
     
     // Примерный вывод:
     // End
-    // Data has been uploaded
+    // Data has been received
 
 Поведение async-функций:
 
@@ -798,7 +838,36 @@ throw. А если и произошла ошибка срабатывается
     // 1. Data has been uploaded
     // 2. End
 
-### 24. Принятие в качестве аргументов лямбда выражения
+### 24. Ключевое слово type
+Ключевое слово `type` - это просто обертка, 
+чтобы каждый раз не писать очень длинный тип:
+
+    import util.Map
+    import util.List
+
+    type Bans = Map<String, List<String>> // Ключ - Игрок && Значение - список причин
+    type StrMap<V> = Map<String, V> // Дженерики прямо в типе
+
+    fun main() {
+        Bans bans = new Bans()
+        bans.put('Very_Bad_Player_228', List::of('Uses cheats', 'Griefer', 'I don\'t like him'))
+
+        StrMap<int> nums = Map::of(('MaxValue', 2_174_000_000), ('MinValue', -2_174_000_000), ('Zero', 0))
+        nums.put('One', 1)
+    }
+
+По сути `type` это упрощение для написания
+типов, ведь на самом деле, писать везде 
+длинные и всегда одинаковые типы в:
+  - Типах переменных
+  - Возвращаемом типе функции/метода
+  - instance_of
+
+не удобно, и долго.
+Это всего лишь упрощенное предстовление
+о `type`, я думаю вы найдете ей применение!
+
+### 25. Принятие в качестве аргументов лямбда выражения
 Чтобы принять лямбду выражения, 
 достаточно написать какие аргументы
 лямбда выражение будет принимать и 
@@ -816,7 +885,7 @@ throw. А если и произошла ошибка срабатывается
         print(res) // 25
     }
 
-### 25. Модули
+### 26. Модули
 Модуль - это совокупность функций. Это подходит для построения Утилит.<br>
 Чтобы создать модуль, достаточно перед ее именем поставить ключевое слово `module`:
 
@@ -901,19 +970,22 @@ throw. А если и произошла ошибка срабатывается
   - ab. `class`
   - ac. `this`
   - ad. `gl`
-  - ae. `final`
-  - af. `new`
-  - ag. `null`
+  - ae. `static`
+  - af. `final`
+  - ag. `new`
   - ah. `data`
   - ai. `exception`
   - aj. `abstract`
   - ak. `interface`
   - al. `enum`
-  - am. `instance_of`
-  - an. `launch`
-  - ao. `async`
-  - ap. `await`
-  - aq. `module`
+  - am. `null`
+  - an. `with`
+  - ao. `chain`
+  - ap. `instance_of`
+  - aq. `launch`
+  - ar. `async`
+  - as. `await`
+  - at. `module`
 
 ## Приколы
   - a. Если человек сделал программу 
