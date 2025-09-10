@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::env;
-use std::fmt;
 use std::fs;
 use std::io;
 use std::process;
 use std::thread;
 use std::time::{Duration, Instant};
+use std::mem;
+use std::alloc::{alloc, dealloc, Layout};
+use std::slice;
+use std::ptr;
 
 struct Instruction {
     op: u32,
@@ -14,32 +17,25 @@ struct Instruction {
     raw: String,
 }
 
-#[derive(Debug, Clone)]
-enum HeapValue {
-    Str(String),
-    Array(Box<[u64]>),
-    Object(Object),
-}
-
-#[derive(Debug, Clone)]
-struct Object {
-    class: String,
-    fields: HashMap<String, u64>,
-}
-
-impl fmt::Display for HeapValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            HeapValue::Str(s) => write!(f, "{}", s),
-            HeapValue::Array(v) => write!(f, "{:?}", v),
-            HeapValue::Object(o) => write!(f, "({}:\n{:?})", o.class, o.fields),
-        }
-    }
-}
-
 struct ClassInfo {
     fields: Vec<String>,
     methods: HashMap<String, usize>,
+}
+
+#[derive(Debug, Clone)]
+enum HeapKind {
+    Raw,
+    Str,
+    Array { len: usize },
+    Object { class: String, field_count: usize },
+}
+
+#[derive(Debug, Clone)]
+struct HeapEntry {
+    ptr: *mut u8,
+    size: usize,
+    align: usize,
+    kind: HeapKind,
 }
 
 struct LVM {
@@ -47,7 +43,7 @@ struct LVM {
     classes: HashMap<String, ClassInfo>,
     class_positions: HashMap<String, usize>,
     frame_stack: Vec<HashMap<String, u64>>,
-    heap: HashMap<u64, HeapValue>,
+    heap: HashMap<u64, HeapEntry>,
     instructions: Vec<Instruction>,
     ip: usize,
     labels: HashMap<String, usize>,
@@ -84,11 +80,134 @@ impl LVM {
         h
     }
 
-    fn alloc_heap(&mut self, val: HeapValue) -> u64 {
-        let id = self.next_heap_id;
-        self.next_heap_id += 1;
-        self.heap.insert(id, val);
+    fn alloc_heap_bytes(&mut self, size: usize, align: usize, kind: HeapKind) -> u64 {
+        let layout = Layout::from_size_align(size, align).unwrap();
+        unsafe {
+            let ptr = alloc(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+
+
+            let id = self.next_heap_id;
+            self.next_heap_id += 1;
+
+            self.heap.insert(
+                id,
+                HeapEntry {
+                    ptr,
+                    size,
+                    align,
+                    kind,
+                }
+            );
+
+            id
+        }
+    }
+
+    fn free_heap_bytes(&mut self, id: u64) {
+        if let Some(entry) = self.heap.remove(&id) {
+
+            let layout = Layout::from_size_align(entry.size, entry.align).unwrap();
+            unsafe {
+                dealloc(entry.ptr, layout);
+            }
+        } else {
+            panic!("free_heap_bytes:\n    Id of object: {} is not found in heap", id);
+        }
+    }
+
+    fn write_u64_at(&mut self, id: u64, offset_slots: usize, value: u64) {
+        let entry = self.heap.get(&id)
+            .unwrap_or_else(|| panic!("write_u64_at:\n    Id: {} not found in heap", id));
+        let byte_offset = offset_slots.checked_mul(8).unwrap();
+
+        if byte_offset + 8 > entry.size {
+            panic!("write_u64_at:\n    out of bounds write (id: {}, offset: {})", id, offset_slots);
+        }
+
+        unsafe {
+            let dest = entry.ptr.add(byte_offset) as *mut u64;
+            ptr::write_unaligned(dest, value);
+        }
+    }
+
+    fn read_u64_at(&self, id: u64, offset_slots: usize) -> u64 {
+        let entry = self.heap.get(&id)
+            .unwrap_or_else(|| panic!("read_u64_at:\n    Id: {} not found in heap", id));
+        let byte_offset = offset_slots.checked_mul(8).unwrap();
+
+        if byte_offset + 8 > entry.size {
+            panic!("read_u64_at:\n    out of bounds read (id: {}, offset: {})", id, offset_slots);
+        }
+
+        unsafe {
+            let src = entry.ptr.add(byte_offset) as *const u64;
+            ptr::read_unaligned(src)
+        }
+    }
+
+    fn alloc_object(&mut self, class_name: String, field_count: usize) -> u64 {
+        let size = field_count.checked_mul(8).unwrap();
+        let align = 8usize;
+        let obj = HeapKind::Object {
+            class: class_name,
+            field_count,
+        };
+        self.alloc_heap_bytes(size, align, obj)
+    }
+
+    fn alloc_array(&mut self, len: usize) -> u64 {
+        let size = len.checked_mul(8).unwrap();
+        let align = 8usize;
+        let arr = HeapKind::Array { len, };
+        self.alloc_heap_bytes(size, align, arr)
+    }
+
+    fn alloc_str(&mut self, s: &str) -> u64 {
+        let bytes = s.as_bytes();
+        let len = bytes.len();
+        let mut total = 8 + len;
+
+        if total % 8 != 0 {
+            total += 8 - (total % 8);
+        }
+
+        let id = self.alloc_heap_bytes(total, 8, HeapKind::Str);
+        self.write_u64_at(id, 0, len as u64);
+
+        unsafe {
+            let entry = self.heap.get(&id).unwrap();
+            let dest = entry.ptr.add(8);
+            ptr::copy_nonoverlapping(bytes.as_ptr(), dest, len);
+
+            let pad = total - 8 - len;
+
+            if pad > 0 {
+                ptr::write_bytes(dest.add(len), 0, pad);
+            }
+        }
+
         id
+    }
+
+    fn read_string(&self, id: u64) -> String {
+        let entry = self.heap.get(&id)
+            .unwrap_or_else(|| panic!("read_string:\n    Id: {} not found in heap", id));
+
+        match entry.kind {
+            HeapKind::Str => {
+                let len = self.read_u64_at(id, 0) as usize;
+
+                unsafe {
+                    let src = entry.ptr.add(8);
+                    let slice = slice::from_raw_parts(src, len);
+                    String::from_utf8_lossy(slice).into_owned()
+                }
+            },
+            _ => panic!("read_string:\n    Id: {} is not String", id),
+        }
     }
 
     fn current_mut_frame(&mut self) -> &mut HashMap<String, u64> {
@@ -348,7 +467,7 @@ impl LVM {
                             val.clone()
                         };
 
-                        let id = self.alloc_heap(HeapValue::Str(s));
+                        let id = self.alloc_str(&s);
                         self.push_ref(id);
                     }
 
@@ -546,7 +665,7 @@ impl LVM {
                 let name = args[0].clone();
 
                 if let Some(obj_ref) = self.current_mut_frame().remove(&name) {
-                    self.heap.remove(&obj_ref);
+                    self.free_heap_bytes(obj_ref);
                 } else {
                     panic!("Undefined variable: {}, at {}:{}:\n    {}", name, self.path, line_idx, raw);
                 }
@@ -555,12 +674,51 @@ impl LVM {
 /* clone */ 730356610 => {
                 let reference = self.pop_slot();
 
-                if let Some(obj) = self.heap.get(&reference) {
+                let (kind, size, align, ptr) = {
+                    let entry = self.heap.get(&reference)
+                        .unwrap_or_else(|| panic!("Cannot found ref: {} in heap, at {}:{}:\n    {}", reference, self.path, line_idx, raw)).clone();
 
-                    let new_id = self.alloc_heap(obj.clone());
-                    self.push_ref(new_id);
-                } else {
-                    panic!("Cannot found reference: {} in heap, at {}:{}:\n    {}", reference, self.path, line_idx, raw);
+                    (entry.kind.clone(), entry.size, entry.align, entry.ptr)
+                };
+
+                match kind {
+                    HeapKind::Raw => {
+                        let size = size;
+                        let align = align;
+                        let new_id = self.alloc_heap_bytes(size, align, HeapKind::Raw);
+                        unsafe {
+                            let dst = self.heap.get(&new_id).unwrap().ptr;
+                            let src = ptr;
+                            ptr::copy_nonoverlapping(src, dst, size);
+                        }
+                        self.push_u64(new_id);
+                    }
+
+                    HeapKind::Str => {
+                        let s = self.read_string(reference);
+                        let new_id = self.alloc_str(&s);
+                        self.push_ref(new_id);
+                    }
+
+                    HeapKind::Array { len } => {
+                        let new_id = self.alloc_array(len);
+                        for i in 0..len {
+                            let v = self.read_u64_at(reference, i);
+                            self.write_u64_at(new_id, i, v);
+                        }
+                        self.push_ref(new_id);
+                    }
+
+                    HeapKind::Object { field_count, class } => {
+                        let new_id = self.alloc_object(class.clone(), field_count);
+
+                        for i in 0..field_count {
+                            let v = self.read_u64_at(reference, i);
+                            self.write_u64_at(new_id, i, v);
+                        }
+
+                        self.push_ref(new_id);
+                    }
                 }
             },
 
@@ -579,18 +737,42 @@ impl LVM {
                 /* unt */1255446122 => println!("{}", val),
                 /* int */2515107422 => println!("{}", val as i64),
                 /* float */2797886853 => println!("{}", f64::from_bits(val)),
-                /* str */3259748752 => {
-                            if let Some(HeapValue::Str(s)) = self.heap.get(&val) {
-                                println!("{}", s);
-                            } else {
-                                panic!("Cannot found str reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw);
-                            }
-                        },
-                /* array */2321067302 => {
-                            if let Some(HeapValue::Array(arr)) = self.heap.get(&val) {
-                                println!("{:?}", arr);
-                            } else {
-                                panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw);
+                /* ref */1123320834 => {
+                            let entry = self.heap.get(&val)
+                                .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw));
+
+                            match &entry.kind {
+                                HeapKind::Raw => {
+                                    println!("{}", val);
+                                },
+
+                                HeapKind::Str => {
+                                    let s = self.read_string(val);
+                                    println!("{}", s);
+                                },
+
+                                HeapKind::Array { len } => {
+                                    let mut items = Vec::new();
+
+                                    for i in 0..*len {
+                                        let v = self.read_u64_at(val, i);
+                                        items.push(format!("{}", v));
+                                    }
+                                    println!("[{}]", items.join(", "))
+                                },
+
+                                HeapKind::Object { field_count, class } => {
+                                    print!("{} {{ ", class);
+                                    let mut parts = Vec::new();
+
+                                    for i in 0..*field_count {
+                                        let v = self.read_u64_at(val, i);
+                                        parts.push(format!("f{}: {}", i, v));
+                                    }
+
+                                    print!("{}", parts.join(", "));
+                                    println!(" }}");
+                                },
                             }
                         },
                         _ => panic!("Unknown type: {}, at {}:{}:\n    {}", args[0], self.path, line_idx, raw)
@@ -629,7 +811,7 @@ impl LVM {
                         self.push_f64(val);
                     },
             /* str */3259748752 => {
-                        let id = self.alloc_heap(HeapValue::Str(input.to_string()));
+                        let id = self.alloc_str(input);
                         self.push_ref(id);
                     },
                     _ => panic!("Unknown type: {}, at {}:{}:\n    {}", required_type, self.path, line_idx, raw)
@@ -680,18 +862,13 @@ impl LVM {
                 self.load_class_if_needed(class_name.clone());
 
                 let class_info = self.classes.get(&class_name).unwrap();
-                let mut field_map: HashMap<String, u64> = HashMap::new();
+                let field_count = class_info.fields.len();
 
-                for field_name in &class_info.fields {
-                    field_map.insert(field_name.clone(), 0);
+                let obj_id = self.alloc_object(class_name.clone(), field_count);
+
+                for i in 0..field_count {
+                    self.write_u64_at(obj_id, i, 0);
                 }
-
-                let obj = Object {
-                    class: class_name,
-                    fields: field_map,
-                };
-
-                let obj_id = self.alloc_heap(HeapValue::Object(obj));
 
                 let label = *self.labels.get(&init_label)
                     .unwrap_or_else(|| panic!("Init label: {} is not found, at {}:{}:\n    {}", init_label, self.path, line_idx, raw));
@@ -711,15 +888,20 @@ impl LVM {
                 let obj_ref = self.pop_slot();
                 let val = self.pop_slot();
 
-                if let Some(HeapValue::Object(obj)) = self.heap.get_mut(&obj_ref) {
+                let entry = self.heap.get(&obj_ref)
+                    .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
-                    if !obj.fields.contains_key(&field_name) {
-                        panic!("Cannot found field: {} in object reference, at {}:{}:\n    {}", field_name, self.path, line_idx, raw);
-                    }
+                match &entry.kind {
+                    HeapKind::Object { field_count: _, class } => {
+                        let class_info = self.classes.get(class).unwrap();
+                        let idx = class_info.fields.iter()
+                            .position(|n| n == &field_name)
+                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class, self.path, line_idx, raw));
 
-                    obj.fields.insert(field_name, val);
-                } else {
-                    panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw);
+                        self.write_u64_at(obj_ref, idx, val);
+                    },
+
+                    _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw),
                 }
             },
 
@@ -731,11 +913,21 @@ impl LVM {
                 let field_name = args[0].clone();
                 let obj_ref = self.pop_slot();
 
-                if let Some(HeapValue::Object(obj)) = self.heap.get(&obj_ref) {
+                let entry = self.heap.get(&obj_ref)
+                    .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
-                    self.push_u64(obj.fields.get(&field_name).unwrap().clone());
-                } else {
-                    panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw);
+                match &entry.kind {
+                    HeapKind::Object { field_count: _, class } => {
+                        let class_info = self.classes.get(class).unwrap();
+                        let idx = class_info.fields.iter()
+                            .position(|n| n == &field_name)
+                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class, self.path, line_idx, raw));
+
+                        let v = self.read_u64_at(obj_ref, idx);
+                        self.push_u64(v);
+                    },
+
+                    _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw)
                 }
             },
 
@@ -755,19 +947,22 @@ impl LVM {
                 let method_name = args[0].clone();
                 let obj_ref = self.pop_slot();
 
-                if let Some(HeapValue::Object(obj)) = self.heap.get(&obj_ref) {
+                let entry = self.heap.get(&obj_ref)
+                    .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
-                    let class_name = obj.class.clone();
-                    let class_info = self.classes.get(&class_name).unwrap();
+                match &entry.kind {
+                    HeapKind::Object { field_count: _, class } => {
+                        let class_info = self.classes.get(class).unwrap();
 
-                    let label = class_info.methods.get(&method_name)
-                        .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class_name, self.path, line_idx, raw));
+                        let label = class_info.methods.get(&method_name)
+                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class, self.path, line_idx, raw));
 
-                    self.call_stack.push(self.ip);
-                    self.frame_stack.push(HashMap::new());
-                    self.ip = label + 1;
-                } else {
-                    panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw);
+                        self.call_stack.push(self.ip);
+                        self.frame_stack.push(HashMap::new());
+                        self.ip = label + 1;
+                    },
+
+                    _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw)
                 }
             },
 
@@ -777,10 +972,13 @@ impl LVM {
             },
 
 /* new_array */3719752907 => {
-                let len = self.pop_slot();
+                let len = self.pop_slot() as usize;
 
-                let arr = vec![0u64; len as usize].into_boxed_slice();
-                let id = self.alloc_heap(HeapValue::Array(arr));
+                let id = self.alloc_array(len);
+
+                for i in 0..len {
+                    self.write_u64_at(id, i, 0);
+                }
                 self.push_ref(id);
             }
 
@@ -789,15 +987,19 @@ impl LVM {
                 let idx = self.pop_slot() as usize;
                 let val = self.pop_slot();
 
-                if let Some(HeapValue::Array(arr)) = self.heap.get_mut(&arr_ref) {
+                let entry = self.heap.get(&arr_ref)
+                    .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
-                    if idx >= arr.len() {
-                        panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, arr.len(), raw, line_idx, raw);
-                    }
+                match &entry.kind {
+                    HeapKind::Array { len } => {
+                        if idx >= *len {
+                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, raw, line_idx, raw)
+                        }
 
-                    arr[idx] = val;
-                } else {
-                    panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw);
+                        self.write_u64_at(arr_ref, idx, val);
+                    },
+
+                    _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
                 }
             },
 
@@ -805,27 +1007,37 @@ impl LVM {
                 let arr_ref = self.pop_slot();
                 let idx = self.pop_slot() as usize;
 
-                if let Some(HeapValue::Array(arr)) = self.heap.get(&arr_ref) {
+                let entry = self.heap.get(&arr_ref)
+                    .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
-                    if idx >= arr.len() {
-                        panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, arr.len(), raw, line_idx, raw);
-                    }
+                match &entry.kind {
+                    HeapKind::Array { len } => {
+                        if idx >= *len {
+                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, raw, line_idx, raw)
+                        }
 
-                    let val = arr[idx];
-                    self.push_u64(val);
-                } else {
-                    panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw);
+                        let val = self.read_u64_at(arr_ref, idx);
+                        self.push_u64(val);
+                    },
+
+                    _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
+
                 }
             }
 
 /* array_len */3246697146 => {
                 let arr_ref = self.pop_slot();
 
-                if let Some(HeapValue::Array(arr)) = self.heap.get(&arr_ref) {
-                    let length = arr.len() as u64;
-                    self.push_u64(length);
-                } else {
-                    panic!("Cannot found array reference: {} in heap, at {}:{}:\n     {}", arr_ref, self.path, line_idx, raw);
+                let entry = self.heap.get(&arr_ref)
+                    .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
+
+                match &entry.kind {
+                    HeapKind::Array { len } => {
+                        self.push_u64(*len as u64);
+                    },
+
+                    _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
+
                 }
             }
 
@@ -995,7 +1207,9 @@ impl LVM {
             }
 
 /* jump_if_null */238760827 => {
-
+                if args.len() != 1 {
+                    panic!("At {}:{}:\n    {}\njump_if_null requires 1 argument;\nUsage: jump_if_null <label>", self.path, line_idx, raw);
+                }
             },
 
 /* label */ 4137097213 => {
@@ -1011,7 +1225,7 @@ impl LVM {
 
                 println!("[Stack]\n{:?}", self.stack);
                 println!("[Frame-Stack]\n{:?}", self.frame_stack);
-                println!("[Heap]\n{:?}", self.heap);
+                println!("[HHeap]\n{:?}", self.heap);
                 println!("Took: {:?}", now.elapsed());
 
                 process::exit(code);
@@ -1034,6 +1248,12 @@ fn main() {
         Ok(s) => s,
         Err(e) => panic!("Unable to read file: {};\nError: {}", path, e),
     };
+
+    println!("Size of Instruction: {}", size_of::<Instruction>());
+    println!("Size of ClassInfo: {}", size_of::<ClassInfo>());
+    println!("Size of HeapKind: {}", size_of::<HeapKind>());
+    println!("Size of HeapEntry: {}", size_of::<HeapEntry>());
+    println!("Size of LVM: {}", size_of::<LVM>());
 
     let start = Instant::now();
 
