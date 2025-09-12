@@ -5,11 +5,11 @@ use std::io;
 use std::process;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::mem;
 use std::alloc::{alloc, dealloc, Layout};
 use std::slice;
 use std::ptr;
 
+#[derive(Debug, Clone)]
 struct Instruction {
     op: u32,
     args: Vec<String>,
@@ -17,6 +17,7 @@ struct Instruction {
     raw: String,
 }
 
+#[derive(Debug, Clone)]
 struct ClassInfo {
     fields: Vec<String>,
     methods: HashMap<String, usize>,
@@ -24,7 +25,7 @@ struct ClassInfo {
 
 #[derive(Debug, Clone)]
 enum HeapKind {
-    Raw,
+    Num,
     Str,
     Array { len: usize },
     Object { class: String, field_count: usize },
@@ -38,6 +39,7 @@ struct HeapEntry {
     kind: HeapKind,
 }
 
+#[derive(Debug, Clone)]
 struct LVM {
     call_stack: Vec<usize>,
     classes: HashMap<String, ClassInfo>,
@@ -192,6 +194,12 @@ impl LVM {
         id
     }
 
+    fn alloc_num(&mut self, v: u64) -> u64 {
+        let id = self.alloc_heap_bytes(8, 8, HeapKind::Num);
+        self.write_u64_at(id, 0, v);
+        id
+    }
+
     fn read_string(&self, id: u64) -> String {
         let entry = self.heap.get(&id)
             .unwrap_or_else(|| panic!("read_string:\n    Id: {} not found in heap", id));
@@ -248,6 +256,10 @@ impl LVM {
             }
 
             if let Some(idx) = line.find('#') {
+                line = &line[..idx].trim();
+            } else if let Some(idx) = line.find("//") {
+                line = &line[..idx].trim();
+            } else if let Some(idx) = line.find(';') {
                 line = &line[..idx].trim();
             }
 
@@ -322,7 +334,11 @@ impl LVM {
                     panic!("At {}:{}:\n    {}\nlabel expects 1 argument;\nUsage: label <name>", self.path, idx, instr.raw)
                 }
 
-                let name = instr.args[0].clone();
+                let mut name = instr.args[0].clone();
+
+                if name.ends_with(':') {
+                    name.pop();
+                }
 
                 if self.labels.contains_key(&name) {
                     panic!("Label: \"{}\" already defined, at {}:{}:\n    {}", name, self.path, idx, instr.raw)
@@ -475,7 +491,7 @@ impl LVM {
                         let lambda_pos = self.labels.get(&val)
                             .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", val, self.path, line_idx, raw)).clone();
                         self.push_u64(lambda_pos as u64);
-                    }
+                    },
 
                     _ => {
                         panic!("Unknown type {}, at {}:{}:\n    {}", dtype, self.path, line_idx, raw);
@@ -674,24 +690,19 @@ impl LVM {
 /* clone */ 730356610 => {
                 let reference = self.pop_slot();
 
-                let (kind, size, align, ptr) = {
+                let kind = {
                     let entry = self.heap.get(&reference)
                         .unwrap_or_else(|| panic!("Cannot found ref: {} in heap, at {}:{}:\n    {}", reference, self.path, line_idx, raw)).clone();
 
-                    (entry.kind.clone(), entry.size, entry.align, entry.ptr)
+                    entry.kind.clone()
                 };
 
                 match kind {
-                    HeapKind::Raw => {
-                        let size = size;
-                        let align = align;
-                        let new_id = self.alloc_heap_bytes(size, align, HeapKind::Raw);
-                        unsafe {
-                            let dst = self.heap.get(&new_id).unwrap().ptr;
-                            let src = ptr;
-                            ptr::copy_nonoverlapping(src, dst, size);
-                        }
-                        self.push_u64(new_id);
+
+                    HeapKind::Num => {
+                        let num = self.read_u64_at(reference, 0);
+                        let new_id = self.alloc_num(num);
+                        self.push_ref(new_id);
                     }
 
                     HeapKind::Str => {
@@ -742,8 +753,10 @@ impl LVM {
                                 .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw));
 
                             match &entry.kind {
-                                HeapKind::Raw => {
-                                    println!("{}", val);
+
+                                HeapKind::Num => {
+                                    let v = self.read_u64_at(val, 0);
+                                    println!("{}", v);
                                 },
 
                                 HeapKind::Str => {
@@ -1248,12 +1261,6 @@ fn main() {
         Ok(s) => s,
         Err(e) => panic!("Unable to read file: {};\nError: {}", path, e),
     };
-
-    println!("Size of Instruction: {}", size_of::<Instruction>());
-    println!("Size of ClassInfo: {}", size_of::<ClassInfo>());
-    println!("Size of HeapKind: {}", size_of::<HeapKind>());
-    println!("Size of HeapEntry: {}", size_of::<HeapEntry>());
-    println!("Size of LVM: {}", size_of::<LVM>());
 
     let start = Instant::now();
 

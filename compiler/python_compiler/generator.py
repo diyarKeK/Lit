@@ -1,5 +1,4 @@
 from typing import Union
-
 from nodes import Program, Main_Function, PrintNode, VarDeclarationNode, VarReferenceNode, ExpressionNode, \
     AssignmentNode, AugmentedAssignmentNode, IncrementNode, IfNode, ConditionNode, InputNode, WhileNode, BreakNode, \
     ContinueNode
@@ -8,32 +7,18 @@ import random
 
 
 def generate_cpp(ast: Program):
-    lines = [
-        '#include <iostream>',
-        '#include <string>',
-        '#include <sstream>',
-        'using namespace std;',
-        '',
-    ]
+    lines = []
 
     variables = {}
-    includes = set(lines)
 
     for node in ast.body:
         if isinstance(node, Main_Function):
-            lines.append('int main() {')
+            lines.append('label main')
 
             for stmt in node.body:
-                full_stmt = generate_stmt(stmt, variables, indent='    ')
-                for line in full_stmt.split('\n'):
-                    if line.startswith('#include') and line not in includes:
-                        lines.insert(2, line)
-                        includes.add(line)
-                    else:
-                        lines.append(line)
+                lines.append(generate_stmt(stmt, variables, indent='    '))
 
-            lines.append('    return 0;')
-            lines.append('}')
+            lines.append('    halt 0')
 
     return '\n'.join(lines).strip()
 
@@ -41,14 +26,9 @@ def generate_cpp(ast: Program):
 def generate_stmt(stmt, variables, indent='') -> str:
     if isinstance(stmt, VarDeclarationNode):
         line = ''
-        if stmt.suffix and not stmt.suffix.startswith('f'):
-            line += '#include <cstdint>\n'
-        elif stmt.suffix and stmt.suffix.startswith('f'):
-            line += '#include <iomanip>\n'
 
-        var_type = cpp_type(stmt.var_type, stmt.suffix)
-        suffix = ':' + stmt.suffix if stmt.suffix else ''
-        variables[stmt.name] = stmt.var_type + suffix
+        var_type = stmt.var_type
+        variables[stmt.name] = var_type
 
         if stmt.value is None:
             default = {
@@ -57,7 +37,7 @@ def generate_stmt(stmt, variables, indent='') -> str:
                 'bool': 'false',
                 'str': '""',
             }[stmt.var_type]
-            line += f'{indent}{var_type} {stmt.name} = {default};'
+            line += f'{indent}push_const {var_type} {default} {stmt.name} = {default};'
         elif isinstance(stmt.value, InputNode):
             prompt = ''
             if isinstance(stmt.value.message, str):
@@ -173,39 +153,6 @@ def generate_stmt(stmt, variables, indent='') -> str:
     else:
         raise Exception(f'Unknown Statement: {stmt}')
 
-
-
-def cpp_type(var_type: str, suffix: str = None) -> str:
-    INT_SUFFIX_MAP = {
-        'i8': 'int8_t', 'u8': 'uint8_t',
-        'i16': 'int16_t', 'u16': 'uint16_t',
-        'i32': 'int32_t', 'u32': 'uint32_t',
-        'i64': 'int64_t', 'u64': 'uint64_t'
-    }
-    FLOAT_SUFFIX_MAP = {
-        'f32': 'float', 'f64': 'double'
-    }
-
-    if var_type == 'int':
-        if not suffix:
-            return 'int'
-        if suffix not in INT_SUFFIX_MAP:
-            raise Exception(f'Unknown int suffix: {suffix}')
-        return INT_SUFFIX_MAP[suffix]
-
-    if var_type == 'float':
-        if not suffix:
-            return 'float'
-        if suffix not in FLOAT_SUFFIX_MAP:
-            raise Exception(f'Unknown float suffix: {suffix}')
-        return FLOAT_SUFFIX_MAP[suffix]
-
-    if var_type == 'bool':
-        return 'bool'
-    if var_type == 'str':
-        return 'string'
-
-    raise Exception(f"Can't provide cpp type for var type: {var_type} and suffix: {suffix if suffix else 'NULL'}")
 
 def cpp_literal(val: Union[str, int, float, bool]) -> str:
     if isinstance(val, str):
