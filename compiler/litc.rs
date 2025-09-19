@@ -200,9 +200,9 @@ impl Parser {
             _ => return Err(Error::new("Expected function name after 'fun'!")),
         };
 
-        match self.eat() { Some(Token::LParen) => {}, _ => return Err(Error::new("Expected '(' after function name!"))}
-        match self.eat() { Some(Token::RParen) => {}, _ => return Err(Error::new("Expected ')' after function name!"))}
-        match self.eat() { Some(Token::LBrace) => {}, _ => return Err(Error::new("Expected '{' after function name!"))}
+        match self.eat() { Some(Token::LParen) => {}, _ => return Err(Error::new("Expected '(' after function name!")) }
+        match self.eat() { Some(Token::RParen) => {}, _ => return Err(Error::new("Expected ')' after function name!")) }
+        match self.eat() { Some(Token::LBrace) => {}, _ => return Err(Error::new("Expected '{' after function name!")) }
 
         let mut body = Vec::new();
 
@@ -314,7 +314,7 @@ fn generate(program: &Program) -> String {
     let mut out = String::new();
 
     for f in &program.functions {
-        out.push_str(&format!("label {}\n", f.name));
+        out.push_str(&format!("label {}:\n", f.name));
         let mut symbol_idx: HashMap<String, usize> = HashMap::new();
 
         for stmt in &f.body {

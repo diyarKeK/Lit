@@ -5,7 +5,8 @@ use std::io;
 use std::process;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::alloc::{alloc, dealloc, Layout};
+use std::alloc::{alloc, dealloc, Layout, handle_alloc_error};
+use std::any::Any;
 use std::slice;
 use std::ptr;
 
@@ -29,6 +30,17 @@ enum HeapKind {
     Str,
     Array { len: usize },
     Object { class: String, field_count: usize },
+}
+
+impl HeapKind {
+    fn to_string(&self) -> &str {
+        match self {
+            &HeapKind::Num => "num",
+            &HeapKind::Str => "str",
+            &HeapKind::Array { .. } => "array",
+            &HeapKind::Object { .. } => "object",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +99,7 @@ impl LVM {
         unsafe {
             let ptr = alloc(layout);
             if ptr.is_null() {
-                std::alloc::handle_alloc_error(layout);
+                handle_alloc_error(layout);
             }
 
 
@@ -161,6 +173,11 @@ impl LVM {
     }
 
     fn alloc_array(&mut self, len: usize) -> u64 {
+        if len > 2147483647 {
+            let info = &self.instructions[self.ip - 1];
+            panic!("Array length too big: {}!\nAt {}:{}:\n    {}", len, self.path, info.line_idx, info.raw);
+        }
+
         let size = len.checked_mul(8).unwrap();
         let align = 8usize;
         let arr = HeapKind::Array { len, };
@@ -231,7 +248,7 @@ impl LVM {
     }
 
     fn push_f64(&mut self, val: f64) {
-        self.push_u64(val.to_bits());
+        self.stack.push(val.to_bits());
     }
 
     fn push_ref(&mut self, val: u64) {
@@ -617,6 +634,180 @@ impl LVM {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
                 self.push_f64(f64::from_bits(a) % f64::from_bits(b));
+            }
+
+/* str_add */2122984124 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+
+                let entry_b = self.heap.get(&b)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", b, self.path, line_idx, raw)).clone();
+                let entry_a = self.heap.get(&a)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", a, self.path, line_idx, raw)).clone();
+
+
+                let len_b = self.read_u64_at(b, 0) as usize;
+                let len_a = self.read_u64_at(a, 0) as usize;
+
+                let total = len_a + len_b;
+
+                let id = self.alloc_heap_bytes(8 + total, 8, HeapKind::Str);
+                self.write_u64_at(id, 0, total as u64);
+
+                unsafe {
+                    let entry = self.heap.get(&id).unwrap();
+                    let dst = entry.ptr.add(8);
+
+                    let src_a = entry_a.ptr.add(8);
+                    ptr::copy_nonoverlapping(src_a, dst, len_a);
+
+                    let src_b = entry_b.ptr.add(8);
+                    ptr::copy_nonoverlapping(src_b, dst.add(len_a), len_b);
+                }
+
+                self.push_ref(id);
+            }
+
+/* str_len */3689876820 => {
+                let s = self.pop_slot();
+
+                let entry = self.heap.get(&s)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw));
+
+                match entry.kind {
+                    HeapKind::Str => {
+                        let len = self.read_u64_at(s, 0);
+                        self.push_u64(len);
+                    }
+
+                    _ => panic!("Expected string for str_len, but got {}, at {}:{}:\n    {}", entry.kind.to_string(), self.path, line_idx, raw),
+                }
+            }
+
+/* str_eq */1149816987 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+
+                let entry_b = self.heap.get(&b)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", b, self.path, line_idx, raw));
+                let entry_a = self.heap.get(&a)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", a, self.path, line_idx, raw));
+
+                let len_b = self.read_u64_at(a, 0) as usize;
+                let len_a = self.read_u64_at(a, 0) as usize;
+
+                if len_a != len_b {
+                    self.push_u64(0);
+                } else {
+                    let mut equal = true;
+
+                    unsafe {
+                        let src_a = entry_a.ptr.add(8);
+                        let src_b = entry_b.ptr.add(8);
+
+                        for i in 0..len_a {
+                            if *src_a.add(i) != *src_b.add(i) {
+                                equal = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    self.push_u64(if equal { 1 } else { 0 });
+                }
+            }
+
+/* str_neq */2686287855 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+
+                let entry_b = self.heap.get(&b)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", b, self.path, line_idx, raw));
+                let entry_a = self.heap.get(&a)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", a, self.path, line_idx, raw));
+
+                let len_b = self.read_u64_at(a, 0) as usize;
+                let len_a = self.read_u64_at(a, 0) as usize;
+
+                if len_a != len_b {
+                    self.push_u64(1);
+                } else {
+                    let mut not_equal = false;
+
+                    unsafe {
+                        let src_a = entry_a.ptr.add(8);
+                        let src_b = entry_b.ptr.add(8);
+
+                        for i in 0..len_a {
+                            if *src_a.add(i) != *src_b.add(i) {
+                                not_equal = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    self.push_u64(if not_equal { 1 } else { 0 });
+                }
+            }
+
+/* str_upper */2975764495 => {
+                let s = self.pop_slot();
+                let entry = self.heap.get(&s)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
+
+                let len = self.read_u64_at(s, 0) as usize;
+
+                let id = self.alloc_heap_bytes(8 + len, 8, HeapKind::Str);
+                self.write_u64_at(id, 0, len as u64);
+
+                unsafe {
+                    let src = entry.ptr.add(8);
+
+                    let dest_entry = self.heap.get(&id).unwrap();
+                    let dest = dest_entry.ptr.add(8);
+
+                    for i in 0..len {
+                        let ch = *src.add(i);
+
+                        *dest.add(i) = if ch >= b'a' && ch <= b'z' {
+                            ch - 32
+                        } else {
+                            ch
+                        };
+                    }
+                }
+
+                self.push_ref(id);
+            }
+
+/* str_lower */871400802 => {
+                let s = self.pop_slot();
+                let entry = self.heap.get(&s)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
+
+                let len = self.read_u64_at(s, 0) as usize;
+
+                let id = self.alloc_heap_bytes(8 + len, 8, HeapKind::Str);
+                self.write_u64_at(id, 0, len as u64);
+
+                unsafe {
+                    let src = entry.ptr.add(8);
+
+                    let dest_entry = self.heap.get(&id).unwrap();
+                    let dest = dest_entry.ptr.add(8);
+
+                    for i in 0..len {
+                        let ch = *src.add(i);
+
+                        *dest.add(i) = if ch >= b'A' && ch <= b'Z' {
+                            ch + 32
+                        } else {
+                            ch
+                        };
+                    }
+                }
+
+                self.push_ref(id);
             }
 
 /* cast */  2854572110 => {
@@ -1238,7 +1429,7 @@ impl LVM {
 
                 println!("[Stack]\n{:?}", self.stack);
                 println!("[Frame-Stack]\n{:?}", self.frame_stack);
-                println!("[HHeap]\n{:?}", self.heap);
+                println!("[Heap]\n{:?}", self.heap);
                 println!("Took: {:?}", now.elapsed());
 
                 process::exit(code);
@@ -1247,6 +1438,15 @@ impl LVM {
             _ => panic!("Unknown instruction, at {}:{}:\n    {}", self.path, self.ip, instr.raw),
         }
     }
+}
+
+fn print_op_hash(op: &str) {
+    if op == "" {
+        return;
+    }
+
+    let hash = LVM::opcode_hash(op);
+    println!("{}: {}", op, hash);
 }
 
 fn main() {
@@ -1262,8 +1462,10 @@ fn main() {
         Err(e) => panic!("Unable to read file: {};\nError: {}", path, e),
     };
 
-    let start = Instant::now();
+    print_op_hash("");
 
+    let start = Instant::now();
+    
     let mut lvm = LVM::new(path);
     lvm.parse_and_load(&data).unwrap();
     lvm.run(start);
