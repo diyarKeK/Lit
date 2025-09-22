@@ -28,10 +28,17 @@
 64 битное без-знаковое число. И поэтому если не указать 
 тип, то вывелось бы ее адрес в куче.
 
+Аргумент `type` в команде `print` может быть:
+- a. `unt`
+- b. `int`
+- c. `float`
+- d. `ref` - ссылка на строку/объект/массив
+
+    
     label main:
         
         push_const str "Hello, World!"
-        print str
+        print ref
         
         halt 0
 
@@ -57,7 +64,7 @@
         print float
     
         push_const str "Alex"
-        print str
+        print ref
 
         halt 0
 
@@ -88,13 +95,13 @@
     label main:
         
         push_const str "Enter a Number: "
-        print str
+        print ref
 
         input int
         store_var a
 
         push_const str "a is: "
-        print str
+        print ref
 
         load_var a
         print int
@@ -130,7 +137,7 @@
 
         halt 0
 
-## Сравнения и Jump
+## 7. Сравнения и Jump
 Для каждых типов, сравнение, как и арифметика, 
 происходит по разному:
 - a. Для `unt` - `u_eq, u_neq, u_lt, u_gt, u_lte, u_gte`
@@ -141,8 +148,47 @@
 `lt` - меньше, `gt` - больше, `lte` - меньше или равно,
 `gte` - больше или равно.
 
+Команды такие как:
+- a. `jump <label>`
+- b. `jump_if_false <label>`
+- c. `jump_if_true <label>`
 
-## Список всех команд в LVM:
+Предназначеные для перемещения по коду,
+где `jump_if_false` перемещает когда
+последнее значение в стеке равняется 0,
+а `jump_if_true` когда значение 1.
+Ну а сам `jump` перемещает всегда
+
+    label main:
+
+        push_const str "Guess PI: "
+        print ref
+
+        input str
+        store_var input
+
+        load_var input
+        push_const float 3.14 
+        f_eq
+        jump_if_false else
+            
+            push_const str "You Guessed PI!"
+            print ref
+
+            jump end
+
+        label else:
+            
+            push_const str "Unfortunately, You Didn't Guessed PI\nIt was: 3.14"
+            print ref
+
+        label end:
+        halt 0
+
+## 8. Работа со строками
+
+
+## Список команд в LVM:
 - a. `label <name>`
 - b. `halt (<exit_code>)`
 - c. `push_const <type> <val>`
@@ -183,3 +229,6 @@
 - al. `f_gt`
 - am. `f_lte`
 - an. `f_gte`
+- ao. `jump <label>`
+- ap. `jump_if_false <label>`
+- aq. `jump_if_true <label>`

@@ -6,7 +6,6 @@ use std::process;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::alloc::{alloc, dealloc, Layout, handle_alloc_error};
-use std::any::Any;
 use std::slice;
 use std::ptr;
 
@@ -29,16 +28,16 @@ enum HeapKind {
     Num,
     Str,
     Array { len: usize },
-    Object { class: String, field_count: usize },
+    Object { class_name: String, field_count: usize },
 }
 
 impl HeapKind {
     fn to_string(&self) -> &str {
         match self {
-            &HeapKind::Num => "num",
-            &HeapKind::Str => "str",
-            &HeapKind::Array { .. } => "array",
-            &HeapKind::Object { .. } => "object",
+            HeapKind::Num => "num",
+            HeapKind::Str => "str",
+            HeapKind::Array { .. } => "array",
+            HeapKind::Object { .. } => "object",
         }
     }
 }
@@ -138,7 +137,7 @@ impl LVM {
         let byte_offset = offset_slots.checked_mul(8).unwrap();
 
         if byte_offset + 8 > entry.size {
-            panic!("write_u64_at:\n    out of bounds write (id: {}, offset: {})", id, offset_slots);
+            panic!("write_u64_at:\n    out of bounds write (id: {}, offset: {}, entry.size: {}, byte_offset: {})", id, offset_slots, entry.size, byte_offset);
         }
 
         unsafe {
@@ -166,7 +165,7 @@ impl LVM {
         let size = field_count.checked_mul(8).unwrap();
         let align = 8usize;
         let obj = HeapKind::Object {
-            class: class_name,
+            class_name,
             field_count,
         };
         self.alloc_heap_bytes(size, align, obj)
@@ -180,7 +179,8 @@ impl LVM {
 
         let size = len.checked_mul(8).unwrap();
         let align = 8usize;
-        let arr = HeapKind::Array { len, };
+        let arr = HeapKind::Array { len };
+
         self.alloc_heap_bytes(size, align, arr)
     }
 
@@ -668,6 +668,66 @@ impl LVM {
                 self.push_ref(id);
             }
 
+/* str_set */2349001035 => {
+                let s = self.pop_slot();
+                let entry_s = self.heap.get(&s)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
+
+                let idx = self.pop_slot() as usize;
+
+                let sym = {
+                    let raw_v = self.pop_slot();
+
+                    if raw_v > u8::MAX as u64 {
+                        panic!("Num: {} is more than 8 Bit max value, at {}:{}:\n    {}", raw, self.path, line_idx, raw);
+                    }
+
+                    raw_v as u8
+                };
+
+                match entry_s.kind {
+                    HeapKind::Str => {
+                        let len_s = self.read_u64_at(s, 0) as usize;
+
+                        if idx >= len_s {
+                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len_s, self.path, line_idx, raw);
+                        }
+
+                        unsafe {
+                            let dest = entry_s.ptr.add(8);
+                            ptr::write(dest.add(idx), sym);
+                        }
+                    }
+
+                    _ => panic!("Expected string for str_set, but got {}, at {}:{}:\n    {}", entry_s.kind.to_string(), self.path, line_idx, raw),
+                }
+            }
+
+/* str_get */2539503519 => {
+                let s = self.pop_slot();
+                let entry_s = self.heap.get(&s)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
+
+                let idx = self.pop_slot() as usize;
+
+                match entry_s.kind {
+                    HeapKind::Str => {
+                        let len_s = self.read_u64_at(s, 0) as usize;
+
+                        if idx >= len_s {
+                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len_s, self.path, line_idx, raw);
+                        }
+
+                        unsafe {
+                            let src = entry_s.ptr.add(8);
+                            self.push_u64(*src.add(idx) as u64)
+                        }
+                    }
+
+                    _ => panic!("Expected string for str_set, but got {}, at {}:{}:\n    {}", entry_s.kind.to_string(), self.path, line_idx, raw),
+                }
+            }
+
 /* str_len */3689876820 => {
                 let s = self.pop_slot();
 
@@ -681,6 +741,36 @@ impl LVM {
                     }
 
                     _ => panic!("Expected string for str_len, but got {}, at {}:{}:\n    {}", entry.kind.to_string(), self.path, line_idx, raw),
+                }
+            }
+
+/* str_bytes */3717867548 => {
+                let s = self.pop_slot();
+
+                let entry = self.heap.get(&s)
+                    .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
+
+                match entry.kind {
+                    HeapKind::Str => {
+                        let len = self.read_u64_at(s, 0) as usize;
+
+                        let bytes_id = self.alloc_array(len);
+
+                        self.write_u64_at(bytes_id, 0, len as u64);
+
+                        unsafe {
+                            let src = entry.ptr.add(8);
+
+                            for i in 0..len {
+                                let b = *src.add(i);
+                                self.write_u64_at(bytes_id, i, b as u64);
+                            }
+                        }
+
+                        self.push_ref(bytes_id);
+                    }
+
+                    _ => panic!("Expected string for str_bytes, but got {}, at {}:{}:\n    {}", entry.kind.to_string(), self.path, line_idx, raw),
                 }
             }
 
@@ -911,8 +1001,8 @@ impl LVM {
                         self.push_ref(new_id);
                     }
 
-                    HeapKind::Object { field_count, class } => {
-                        let new_id = self.alloc_object(class.clone(), field_count);
+                    HeapKind::Object { class_name, field_count } => {
+                        let new_id = self.alloc_object(class_name.clone(), field_count);
 
                         for i in 0..field_count {
                             let v = self.read_u64_at(reference, i);
@@ -932,13 +1022,13 @@ impl LVM {
                     }
 
                     let val = self.pop_slot();
-                    let dtype = &args[0];
-                    let hashed_type = LVM::opcode_hash(dtype);
+                    let hashed_type = LVM::opcode_hash(&args[0]);
 
                     match hashed_type {
                 /* unt */1255446122 => println!("{}", val),
                 /* int */2515107422 => println!("{}", val as i64),
                 /* float */2797886853 => println!("{}", f64::from_bits(val)),
+                /* char */2823553821 => println!("{}", val as u8 as char),
                 /* ref */1123320834 => {
                             let entry = self.heap.get(&val)
                                 .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw));
@@ -965,8 +1055,8 @@ impl LVM {
                                     println!("[{}]", items.join(", "))
                                 },
 
-                                HeapKind::Object { field_count, class } => {
-                                    print!("{} {{ ", class);
+                                HeapKind::Object { class_name, field_count } => {
+                                    print!("{} {{ ", class_name);
                                     let mut parts = Vec::new();
 
                                     for i in 0..*field_count {
@@ -1096,11 +1186,11 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { field_count: _, class } => {
-                        let class_info = self.classes.get(class).unwrap();
+                    HeapKind::Object { class_name, field_count: _ } => {
+                        let class_info = self.classes.get(class_name).unwrap();
                         let idx = class_info.fields.iter()
                             .position(|n| n == &field_name)
-                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class, self.path, line_idx, raw));
+                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_name, self.path, line_idx, raw));
 
                         self.write_u64_at(obj_ref, idx, val);
                     },
@@ -1121,11 +1211,11 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { field_count: _, class } => {
-                        let class_info = self.classes.get(class).unwrap();
+                    HeapKind::Object { class_name, field_count: _ } => {
+                        let class_info = self.classes.get(class_name).unwrap();
                         let idx = class_info.fields.iter()
                             .position(|n| n == &field_name)
-                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class, self.path, line_idx, raw));
+                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_name, self.path, line_idx, raw));
 
                         let v = self.read_u64_at(obj_ref, idx);
                         self.push_u64(v);
@@ -1155,11 +1245,11 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { field_count: _, class } => {
-                        let class_info = self.classes.get(class).unwrap();
+                    HeapKind::Object { class_name, field_count: _ } => {
+                        let class_info = self.classes.get(class_name).unwrap();
 
                         let label = class_info.methods.get(&method_name)
-                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class, self.path, line_idx, raw));
+                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class_name, self.path, line_idx, raw));
 
                         self.call_stack.push(self.ip);
                         self.frame_stack.push(HashMap::new());
@@ -1197,7 +1287,7 @@ impl LVM {
                 match &entry.kind {
                     HeapKind::Array { len } => {
                         if idx >= *len {
-                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, raw, line_idx, raw)
+                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
                         self.write_u64_at(arr_ref, idx, val);
@@ -1217,7 +1307,7 @@ impl LVM {
                 match &entry.kind {
                     HeapKind::Array { len } => {
                         if idx >= *len {
-                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, raw, line_idx, raw)
+                            panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
                         let val = self.read_u64_at(arr_ref, idx);
@@ -1423,6 +1513,8 @@ impl LVM {
 /* halt */  3904824570 => {
                 let code = if args.len() == 1 {
                     args[0].parse::<i32>().unwrap().clone()
+                } else if !self.stack.is_empty() {
+                    self.pop_slot() as i32
                 } else {
                     0
                 };
@@ -1463,6 +1555,8 @@ fn main() {
     };
 
     print_op_hash("");
+    print_op_hash("str_bytes");
+
 
     let start = Instant::now();
     
