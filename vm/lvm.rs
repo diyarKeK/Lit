@@ -27,7 +27,7 @@ struct ClassInfo {
 enum HeapKind {
     Num,
     Str,
-    Array { len: usize },
+    Array,
     Object { class_name: String, field_count: usize },
 }
 
@@ -36,7 +36,7 @@ impl HeapKind {
         match self {
             HeapKind::Num => "num",
             HeapKind::Str => "str",
-            HeapKind::Array { .. } => "array",
+            HeapKind::Array => "array",
             HeapKind::Object { .. } => "object",
         }
     }
@@ -177,11 +177,12 @@ impl LVM {
             panic!("Array length too big: {}!\nAt {}:{}:\n    {}", len, self.path, info.line_idx, info.raw);
         }
 
-        let size = len.checked_mul(8).unwrap();
-        let align = 8usize;
-        let arr = HeapKind::Array { len };
+        let size = 8 + len * 8;
 
-        self.alloc_heap_bytes(size, align, arr)
+        let id = self.alloc_heap_bytes(size, 8, HeapKind::Array);
+        self.write_u64_at(id, 0, len as u64);
+
+        id
     }
 
     fn alloc_str(&mut self, s: &str) -> u64 {
@@ -992,8 +993,10 @@ impl LVM {
                         self.push_ref(new_id);
                     }
 
-                    HeapKind::Array { len } => {
+                    HeapKind::Array => {
+                        let len = self.read_u64_at(reference, 0) as usize;
                         let new_id = self.alloc_array(len);
+
                         for i in 0..len {
                             let v = self.read_u64_at(reference, i);
                             self.write_u64_at(new_id, i, v);
@@ -1045,10 +1048,11 @@ impl LVM {
                                     println!("{}", s);
                                 },
 
-                                HeapKind::Array { len } => {
+                                HeapKind::Array => {
                                     let mut items = Vec::new();
+                                    let len = self.read_u64_at(val, 0) as usize;
 
-                                    for i in 0..*len {
+                                    for i in 0..len {
                                         let v = self.read_u64_at(val, i);
                                         items.push(format!("{}", v));
                                     }
@@ -1199,7 +1203,7 @@ impl LVM {
                 }
             },
 
-/* load_field*/1285198278 => {
+/* load_field */1285198278 => {
                 if args.len() != 1 {
                     panic!("At {}:{}:\n    {}\nload_field requires 1 argument;\nUsage: load_field <name>", self.path, line_idx, raw);
                 }
@@ -1270,9 +1274,13 @@ impl LVM {
 
                 let id = self.alloc_array(len);
 
-                for i in 0..len {
-                    self.write_u64_at(id, i, 0);
+                let entry = self.heap.get(&id).unwrap();
+
+                unsafe {
+                    let dest = entry.ptr.add(8);
+                    ptr::write_bytes(dest, 0, len * 8);
                 }
+
                 self.push_ref(id);
             }
 
@@ -1285,12 +1293,17 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Array { len } => {
-                        if idx >= *len {
+                    HeapKind::Array => {
+                        let len = self.read_u64_at(arr_ref, 0) as usize;
+
+                        if idx >= len {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
-                        self.write_u64_at(arr_ref, idx, val);
+                        unsafe {
+                            let dest = entry.ptr.add(8 + idx * 8) as *mut u64;
+                            ptr::write_unaligned(dest, val);
+                        }
                     },
 
                     _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
@@ -1305,13 +1318,18 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Array { len } => {
-                        if idx >= *len {
+                    HeapKind::Array => {
+                        let len = self.read_u64_at(arr_ref, 0) as usize;
+
+                        if idx >= len {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
-                        let val = self.read_u64_at(arr_ref, idx);
-                        self.push_u64(val);
+                        unsafe {
+                            let src = entry.ptr.add(8 + idx * 8) as *const u64;
+                            let val = ptr::read_unaligned(src);
+                            self.push_u64(val);
+                        }
                     },
 
                     _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
@@ -1326,8 +1344,9 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Array { len } => {
-                        self.push_u64(*len as u64);
+                    HeapKind::Array => {
+                        let len = self.read_u64_at(arr_ref, 0);
+                        self.push_u64(len);
                     },
 
                     _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
