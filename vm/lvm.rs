@@ -240,6 +240,12 @@ impl LVM {
         self.frame_stack.last_mut().unwrap()
     }
 
+    fn get_label(&mut self, label: &String) -> usize {
+        self.labels.get(label)
+            .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", label, self.path, self.ip, self.instructions[self.ip].raw))
+            .clone()
+    }
+
     fn push_u64(&mut self, val: u64) {
         self.stack.push(val);
     }
@@ -431,10 +437,7 @@ impl LVM {
                     let name = args[0].clone();
                     let label = args[1].clone();
 
-                    let pos = match self.labels.get(&label) {
-                        Some(idx) => *idx,
-                        None => panic!("Method: {} is not found, at {}:{}:\n     {}", class_name, self.path, idx, raw)
-                    };
+                    let pos = self.get_label(&label);
 
                     self.classes.get_mut(&class_name).unwrap()
                         .methods.insert(name, pos);
@@ -506,8 +509,7 @@ impl LVM {
                     }
 
             /* lambda */2131063274 => {
-                        let lambda_pos = self.labels.get(&val)
-                            .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", val, self.path, line_idx, raw)).clone();
+                        let lambda_pos = self.get_label(&val);
                         self.push_u64(lambda_pos as u64);
                     },
 
@@ -1122,14 +1124,10 @@ impl LVM {
                 }
 
                 let label = args[0].clone();
-                if let Some(lab) = self.labels.get(&label) {
-                    self.call_stack.push(self.ip);
-                    self.frame_stack.push(HashMap::new());
+                self.call_stack.push(self.ip);
+                self.frame_stack.push(HashMap::new());
 
-                    self.ip = lab.clone() + 1;
-                } else {
-                    panic!("Label: {} is not found, at {}:{}:\n    {}", label, self.path, line_idx, raw);
-                }
+                self.ip = self.get_label(&label) + 1;
             }
 
 /* call_dynamic */4082794239 => {
@@ -1168,13 +1166,10 @@ impl LVM {
                     self.write_u64_at(obj_id, i, 0);
                 }
 
-                let label = *self.labels.get(&init_label)
-                    .unwrap_or_else(|| panic!("Init label: {} is not found, at {}:{}:\n    {}", init_label, self.path, line_idx, raw));
-
                 self.call_stack.push(self.ip);
                 self.frame_stack.push(HashMap::new());
                 self.this = Some(obj_id);
-                self.ip = label + 1;
+                self.ip = self.get_label(&init_label) + 1;
             },
 
 /* set_field */2059520392 => {
@@ -1484,10 +1479,8 @@ impl LVM {
                     panic!("At {}:{}:\n    {}\njump requires 1 argument;\nUsage: jump <label>", self.path, line_idx, raw);
                 }
 
-                let label_name = &args[0];
-                self.ip = self.labels.get(label_name)
-                    .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", label_name, self.path, line_idx, raw))
-                    .clone() + 1;
+                let label_name = args[0].clone();
+                self.ip = self.get_label(&label_name) + 1;
             }
 
 /* jump_if_false */3471442001 => {
@@ -1498,10 +1491,9 @@ impl LVM {
                 let cond = self.pop_slot();
 
                 if cond != 1 {
-                    let label_name = &args[0];
-                    self.ip = self.labels.get(label_name)
-                        .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", label_name, self.path, line_idx, raw))
-                        .clone() + 1;
+                    let label_name = args[0].clone();
+
+                    self.ip = self.get_label(&label_name) + 1;
                 }
             }
 
@@ -1512,16 +1504,22 @@ impl LVM {
 
                 let cond = self.pop_slot();
                 if cond == 1 {
-                    let label_name = &args[0];
-                    self.ip = self.labels.get(label_name)
-                        .unwrap_or_else(|| panic!("Label: {} is not found, at {}:{}:\n    {}", label_name, self.path, line_idx, raw))
-                        .clone() + 1;
+                    let label_name = args[0].clone();
+
+                    self.ip = self.get_label(&label_name) + 1;
                 }
             }
 
 /* jump_if_null */238760827 => {
                 if args.len() != 1 {
                     panic!("At {}:{}:\n    {}\njump_if_null requires 1 argument;\nUsage: jump_if_null <label>", self.path, line_idx, raw);
+                }
+
+                let val = self.pop_slot();
+                if val == 0 {
+                    let label_name = args[0].clone();
+
+                    self.ip = self.get_label(&label_name) + 1;
                 }
             },
 
@@ -1574,8 +1572,6 @@ fn main() {
     };
 
     print_op_hash("");
-    print_op_hash("str_bytes");
-
 
     let start = Instant::now();
     
