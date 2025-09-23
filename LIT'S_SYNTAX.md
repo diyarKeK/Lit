@@ -309,9 +309,9 @@
 
 Чтобы принять лямбда выражение в качестве
 аргумента, можно использовать такой паттерн:
-`lambda: (<lambda's_args>) => <return_type> <arg_name>`
+`lambda <arg_name>: (<lambda's_args>) => <return_type>`
 
-    fun accept_lambda(lambda: (int a, int b) => int some, int c, int d): int {
+    fun accept_lambda(lambda some: (int a, int b) => int, int c, int d): int {
         return some(c, d)
     }
     
@@ -762,13 +762,13 @@ throw. А если и произошла ошибка срабатывается
             current_array = new E[1]
         }
       
-        this(int initial_size) {
+        this(unt initial_size) {
             current_array = new E[initial_size]
         }
         ...
         
         fun add(E e) { // принимаем в качестве типа аргумента принятый дженерик
-            E[] new_array = new E[current_array + 1]
+            E[] new_array = new E[current_array.length + 1]
             
             for int i = 0, i < new_array.length, i++ {
                 if i == new_array.length - 1 {
@@ -781,7 +781,7 @@ throw. А если и произошла ошибка срабатывается
             current_array = new_array
         } 
       
-        fun sort(lambda: (E[] array) => E[] method) {
+        fun sort(lambda method: (E[] array) => E[]) {
             current_array = method(current_array)
         }
       
