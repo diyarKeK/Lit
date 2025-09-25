@@ -182,6 +182,10 @@ impl LVM {
         let id = self.alloc_heap_bytes(size, 8, HeapKind::Array);
         self.write_u64_at(id, 0, len as u64);
 
+        for i in 0..len {
+            self.write_u64_at(id, i + 1, 0);
+        }
+
         id
     }
 
@@ -759,14 +763,12 @@ impl LVM {
 
                         let bytes_id = self.alloc_array(len);
 
-                        self.write_u64_at(bytes_id, 0, len as u64);
-
                         unsafe {
                             let src = entry.ptr.add(8);
 
                             for i in 0..len {
                                 let b = *src.add(i);
-                                self.write_u64_at(bytes_id, i, b as u64);
+                                self.write_u64_at(bytes_id, i + 1, b as u64);
                             }
                         }
 
@@ -953,7 +955,8 @@ impl LVM {
                     let frame = self.frame_stack.last().unwrap();
                     frame.get(&name).unwrap_or_else(|| panic!("Undefined variable: {}, at {}:{}:\n    {}", name, self.path, line_idx, raw)).clone()
                 };
-                self.stack.push(val);
+
+                self.push_u64(val);
             }
 
 /* free */  2578706139 => {
@@ -1269,13 +1272,6 @@ impl LVM {
 
                 let id = self.alloc_array(len);
 
-                let entry = self.heap.get(&id).unwrap();
-
-                unsafe {
-                    let dest = entry.ptr.add(8);
-                    ptr::write_bytes(dest, 0, len * 8);
-                }
-
                 self.push_ref(id);
             }
 
@@ -1295,10 +1291,7 @@ impl LVM {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
-                        unsafe {
-                            let dest = entry.ptr.add(8 + idx * 8) as *mut u64;
-                            ptr::write_unaligned(dest, val);
-                        }
+                        self.write_u64_at(arr_ref, idx + 1, val);
                     },
 
                     _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
@@ -1320,11 +1313,8 @@ impl LVM {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
-                        unsafe {
-                            let src = entry.ptr.add(8 + idx * 8) as *const u64;
-                            let val = ptr::read_unaligned(src);
-                            self.push_u64(val);
-                        }
+                        let val = self.read_u64_at(arr_ref, idx + 1);
+                        self.push_u64(val);
                     },
 
                     _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
@@ -1352,126 +1342,126 @@ impl LVM {
 /* u_eq */  3848242203 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a == b { 1 } else { 0 });
+                self.push_u64(if a == b { 1 } else { 0 });
             },
 
 /* u_neq */ 1377440367 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a != b { 1 } else { 0 });
+                self.push_u64(if a != b { 1 } else { 0 });
             },
 
 /* u_lt */  3729666037 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a < b { 1 } else { 0 });
+                self.push_u64(if a < b { 1 } else { 0 });
             },
 
 /* u_gt*/   3965979726 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a > b { 1 } else { 0 });
+                self.push_u64(if a > b { 1 } else { 0 });
             },
 
 /* u_lte */ 2232737712 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a <= b { 1 } else { 0 });
+                self.push_u64(if a <= b { 1 } else { 0 });
             },
 
 /* u_gte */ 1283401649 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a >= b { 1 } else { 0 });
+                self.push_u64(if a >= b { 1 } else { 0 });
             },
 
 /* i_eq */  3360026535 => {
                 let b = self.pop_slot() as i64;
                 let a = self.pop_slot() as i64;
-                self.stack.push(if a == b { 1 } else { 0 });
+                self.push_u64(if a == b { 1 } else { 0 });
             }
 
 /* i_neq */ 3473496443 => {
                 let b = self.pop_slot() as i64;
                 let a = self.pop_slot() as i64;
-                self.stack.push(if a != b { 1 } else { 0 });
+                self.push_u64(if a != b { 1 } else { 0 });
             }
 
 /* i_lt */  3109892441 => {
                 let b = self.pop_slot() as i64;
                 let a = self.pop_slot() as i64;
-                self.stack.push(if a < b { 1 } else { 0 });
+                self.push_u64(if a < b { 1 } else { 0 });
             }
 
 /* i_gt */  3075204370 => {
                 let b = self.pop_slot() as i64;
                 let a = self.pop_slot() as i64;
-                self.stack.push(if a > b { 1 } else { 0 });
+                self.push_u64(if a > b { 1 } else { 0 });
             }
 
 /* i_lte */ 162824564 => {
                 let b = self.pop_slot() as i64;
                 let a = self.pop_slot() as i64;
-                self.stack.push(if a <= b { 1 } else { 0 });
+                self.push_u64(if a <= b { 1 } else { 0 });
             }
 
 /* i_gte */ 58341973 => {
                 let b = self.pop_slot() as i64;
                 let a = self.pop_slot() as i64;
-                self.stack.push(if a >= b { 1 } else { 0 });
+                self.push_u64(if a >= b { 1 } else { 0 });
             }
 
 /* f_eq */  3248363596 => {
                 let b = f64::from_bits(self.pop_slot());
                 let a = f64::from_bits(self.pop_slot());
-                self.stack.push(if a == b { 1 } else { 0 });
+                self.push_u64(if a == b { 1 } else { 0 });
             }
 
 /* f_neq */ 371414550 => {
                 let b = f64::from_bits(self.pop_slot());
                 let a = f64::from_bits(self.pop_slot());
-                self.stack.push(if a != b { 1 } else { 0 });
+                self.push_u64(if a != b { 1 } else { 0 });
             }
 
 /* f_lt */  3501160714 => {
                 let b = f64::from_bits(self.pop_slot());
                 let a = f64::from_bits(self.pop_slot());
-                self.stack.push(if a < b { 1 } else { 0 });
+                self.push_u64(if a < b { 1 } else { 0 });
             }
 
 /* f_gt */  3533288929 => {
                 let b = f64::from_bits(self.pop_slot());
                 let a = f64::from_bits(self.pop_slot());
-                self.stack.push(if a > b { 1 } else { 0 });
+                self.push_u64(if a > b { 1 } else { 0 });
             }
 
 /* f_lte */ 4080806333 => {
                 let b = f64::from_bits(self.pop_slot());
                 let a = f64::from_bits(self.pop_slot());
-                self.stack.push(if a <= b { 1 } else { 0 });
+                self.push_u64(if a <= b { 1 } else { 0 });
             }
 
 /* f_gte */ 200851148 => {
                 let b = f64::from_bits(self.pop_slot());
                 let a = f64::from_bits(self.pop_slot());
-                self.stack.push(if a >= b { 1 } else { 0 });
+                self.push_u64(if a >= b { 1 } else { 0 });
             }
 
 /* and */   254395046 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a == 1 && b == 1 { 1 } else { 0 })
+                self.push_u64(if a == 1 && b == 1 { 1 } else { 0 })
             }
 
 /* or */    1563699588 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
-                self.stack.push(if a == 1 || b == 1 { 1 } else { 0 })
+                self.push_u64(if a == 1 || b == 1 { 1 } else { 0 })
             }
 
 /* not */   699505802 => {
                 let a = self.pop_slot();
-                self.stack.push(if a != 1 { 1 } else { 0 });
+                self.push_u64(if a != 1 { 1 } else { 0 });
             }
 
 /* jump */  2805947405 => {

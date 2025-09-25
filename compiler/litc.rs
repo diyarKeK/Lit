@@ -310,17 +310,17 @@ fn check_function(f: &Function) -> Result<(), Error> {
     Ok(())
 }
 
-fn generate(program: &Program) -> String {
+fn generate(program: &Program) -> Result<String, Error> {
     let mut out = String::new();
 
     for f in &program.functions {
         out.push_str(&format!("label {}:\n", f.name));
-        let mut symbol_idx: HashMap<String, usize> = HashMap::new();
+        let mut symbol_idx: HashMap<String, String> = HashMap::new();
 
         for stmt in &f.body {
             match stmt {
 
-                Stmt::VarDecl { name, dtype: _, val } => {
+                Stmt::VarDecl { name, dtype, val } => {
                     match val {
                         Expr::Number(n) => {
                             out.push_str(&format!("    push_const int {}\n", n));
@@ -335,7 +335,7 @@ fn generate(program: &Program) -> String {
                     }
 
                     out.push_str(&format!("    store_var {}\n", name));
-                    symbol_idx.insert(name.clone(), 0);
+                    symbol_idx.insert(name.clone(), dtype.clone());
                 }
 
                 Stmt::Print(expr) => {
@@ -351,7 +351,17 @@ fn generate(program: &Program) -> String {
                         }
                         Expr::Var(i) => {
                             out.push_str(&format!("    load_var {}\n", i));
-                            out.push_str("    print str\n");
+
+                            if let Some(dtype) = symbol_idx.get(i) {
+                                match dtype.as_str() {
+                                    "unt" => out.push_str("    print unt\n"),
+                                    "int" => out.push_str("    print int\n"),
+                                    "float" => out.push_str("    print float\n"),
+                                    "str" => out.push_str("    print ref\n"),
+
+                                    _ => return Err(Error::new(format!("Unknown variable type: {}", dtype))),
+                                }
+                            }
                         }
                     }
                 }
@@ -365,7 +375,7 @@ fn generate(program: &Program) -> String {
         }
     }
 
-    out
+    Ok(out)
 }
 
 fn main() -> Result<(), Error> {
@@ -394,7 +404,7 @@ fn main() -> Result<(), Error> {
 
     let path = path.replace(".lit", ".lbc");
 
-    fs::write(&path, bytecode)
+    fs::write(&path, bytecode?)
         .expect("Unable to write bytecode file");
 
     println!("Completed successfully in {}!", &path);
