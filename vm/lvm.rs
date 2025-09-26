@@ -19,6 +19,7 @@ struct Instruction {
 
 #[derive(Debug, Clone)]
 struct ClassInfo {
+    class: String,
     fields: Vec<String>,
     methods: HashMap<String, usize>,
 }
@@ -28,7 +29,7 @@ enum HeapKind {
     Num,
     Str,
     Array,
-    Object { class_name: String, field_count: usize },
+    Object { class_hash: u32, field_count: usize },
 }
 
 impl HeapKind {
@@ -53,7 +54,7 @@ struct HeapEntry {
 #[derive(Debug, Clone)]
 struct LVM {
     call_stack: Vec<usize>,
-    classes: HashMap<String, ClassInfo>,
+    classes: HashMap<u32, ClassInfo>,
     class_positions: HashMap<String, usize>,
     frame_stack: Vec<HashMap<String, u64>>,
     heap: HashMap<u64, HeapEntry>,
@@ -67,7 +68,7 @@ struct LVM {
 }
 
 impl LVM {
-    fn new(path: String) -> Self {
+    fn new(path: String) -> LVM {
         LVM {
             call_stack: Vec::new(),
             classes: HashMap::new(),
@@ -161,11 +162,12 @@ impl LVM {
         }
     }
 
-    fn alloc_object(&mut self, class_name: String, field_count: usize) -> u64 {
+    fn alloc_object(&mut self, class_hash: u32, field_count: usize) -> u64 {
         let size = field_count.checked_mul(8).unwrap();
         let align = 8usize;
+
         let obj = HeapKind::Object {
-            class_name,
+            class_hash,
             field_count,
         };
         self.alloc_heap_bytes(size, align, obj)
@@ -269,7 +271,7 @@ impl LVM {
     fn pop_slot(&mut self) -> u64 {
         match self.stack.pop() {
             Some(v) => v,
-            None => panic!("No elements in stack!\nAt {}:{}:", self.path, self.ip)
+            None => panic!("No elements in stack!\nAt {}:{}:\n    {}", self.path, self.ip, self.instructions[self.ip].raw),
         }
     }
 
@@ -391,7 +393,9 @@ impl LVM {
     }
 
     fn load_class_if_needed(&mut self, class_name: String) {
-        if self.classes.contains_key(&class_name) {
+        let class_hash = LVM::opcode_hash(&class_name);
+
+        if self.classes.contains_key(&class_hash) {
             return;
         }
 
@@ -415,11 +419,12 @@ impl LVM {
                     }
 
                     let info = ClassInfo {
+                        class: class_name.clone(),
                         fields: Vec::new(),
                         methods: HashMap::new(),
                     };
 
-                    self.classes.insert(class_name.clone(), info);
+                    self.classes.insert(class_hash, info);
                 },
 
 /* field */     1736598119 => {
@@ -429,7 +434,7 @@ impl LVM {
 
                     let name = args[0].clone();
 
-                    self.classes.get_mut(&class_name).unwrap()
+                    self.classes.get_mut(&class_hash).unwrap()
                         .fields.push(name);
                 },
 
@@ -443,7 +448,7 @@ impl LVM {
 
                     let pos = self.get_label(&label);
 
-                    self.classes.get_mut(&class_name).unwrap()
+                    self.classes.get_mut(&class_hash).unwrap()
                         .methods.insert(name, pos);
                 }
 
@@ -1009,8 +1014,8 @@ impl LVM {
                         self.push_ref(new_id);
                     }
 
-                    HeapKind::Object { class_name, field_count } => {
-                        let new_id = self.alloc_object(class_name.clone(), field_count);
+                    HeapKind::Object { class_hash, field_count } => {
+                        let new_id = self.alloc_object(class_hash, field_count);
 
                         for i in 0..field_count {
                             let v = self.read_u64_at(reference, i);
@@ -1064,8 +1069,10 @@ impl LVM {
                                     println!("[{}]", items.join(", "))
                                 },
 
-                                HeapKind::Object { class_name, field_count } => {
-                                    print!("{} {{ ", class_name);
+                                HeapKind::Object { class_hash, field_count } => {
+
+                                    print!("{} {{ ", self.classes.get(&class_hash).unwrap().class);
+
                                     let mut parts = Vec::new();
 
                                     for i in 0..*field_count {
@@ -1156,14 +1163,15 @@ impl LVM {
                 }
 
                 let class_name = args[0].clone();
+                let class_hash = LVM::opcode_hash(&class_name);
                 let init_label = args[1].clone();
 
                 self.load_class_if_needed(class_name.clone());
 
-                let class_info = self.classes.get(&class_name).unwrap();
+                let class_info = self.classes.get(&class_hash).unwrap();
                 let field_count = class_info.fields.len();
 
-                let obj_id = self.alloc_object(class_name.clone(), field_count);
+                let obj_id = self.alloc_object(class_hash, field_count);
 
                 for i in 0..field_count {
                     self.write_u64_at(obj_id, i, 0);
@@ -1188,11 +1196,11 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { class_name, field_count: _ } => {
-                        let class_info = self.classes.get(class_name).unwrap();
+                    HeapKind::Object { class_hash, field_count: _ } => {
+                        let class_info = self.classes.get(&class_hash).unwrap();
                         let idx = class_info.fields.iter()
                             .position(|n| n == &field_name)
-                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_name, self.path, line_idx, raw));
+                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_info.class, self.path, line_idx, raw));
 
                         self.write_u64_at(obj_ref, idx, val);
                     },
@@ -1213,11 +1221,11 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { class_name, field_count: _ } => {
-                        let class_info = self.classes.get(class_name).unwrap();
+                    HeapKind::Object { class_hash, field_count: _ } => {
+                        let class_info = self.classes.get(&class_hash).unwrap();
                         let idx = class_info.fields.iter()
                             .position(|n| n == &field_name)
-                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_name, self.path, line_idx, raw));
+                            .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_info.class, self.path, line_idx, raw));
 
                         let v = self.read_u64_at(obj_ref, idx);
                         self.push_u64(v);
@@ -1247,11 +1255,11 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { class_name, field_count: _ } => {
-                        let class_info = self.classes.get(class_name).unwrap();
+                    HeapKind::Object { class_hash, field_count: _ } => {
+                        let class_info = self.classes.get(&class_hash).unwrap();
 
                         let label = class_info.methods.get(&method_name)
-                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class_name, self.path, line_idx, raw));
+                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class_info.class, self.path, line_idx, raw));
 
                         self.call_stack.push(self.ip);
                         self.frame_stack.push(HashMap::new());
@@ -1529,6 +1537,7 @@ impl LVM {
                 println!("[Stack]\n{:?}", self.stack);
                 println!("[Frame-Stack]\n{:?}", self.frame_stack);
                 println!("[Heap]\n{:?}", self.heap);
+                println!("[Classes]\n{:?}", self.classes);
                 println!("Took: {:?}", now.elapsed());
 
                 process::exit(code);
@@ -1548,6 +1557,15 @@ fn print_op_hash(op: &str) {
     println!("{}: {}", op, hash);
 }
 
+fn print_size_of<T>(class: &str) {
+    if class == "" {
+        return;
+    }
+
+    let size_of = size_of::<T>();
+    println!("Size of {}: {}", class, size_of);
+}
+
 fn main() {
     let mut args = env::args();
     let _prog = args.next();
@@ -1562,6 +1580,10 @@ fn main() {
     };
 
     print_op_hash("");
+    print_size_of::<i32>("");
+
+    print_size_of::<HeapKind>("HeapKind");
+    print_size_of::<HeapEntry>("HeapEntry");
 
     let start = Instant::now();
     
