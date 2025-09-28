@@ -668,13 +668,13 @@ impl LVM {
 
                 unsafe {
                     let entry = self.heap.get(&id).unwrap();
-                    let dst = entry.ptr.add(8);
+                    let dest = entry.ptr.add(8);
 
                     let src_a = entry_a.ptr.add(8);
-                    ptr::copy_nonoverlapping(src_a, dst, len_a);
+                    ptr::copy_nonoverlapping(src_a, dest, len_a);
 
                     let src_b = entry_b.ptr.add(8);
-                    ptr::copy_nonoverlapping(src_b, dst.add(len_a), len_b);
+                    ptr::copy_nonoverlapping(src_b, dest.add(len_a), len_b);
                 }
 
                 self.push_ref(id);
@@ -1259,10 +1259,12 @@ impl LVM {
                         let class_info = self.classes.get(&class_hash).unwrap();
 
                         let label = class_info.methods.get(&method_name)
-                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class_info.class, self.path, line_idx, raw));
+                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class_info.class, self.path, line_idx, raw))
+                            .clone();
 
                         self.call_stack.push(self.ip);
                         self.frame_stack.push(HashMap::new());
+                        self.this = Some(obj_ref);
                         self.ip = label + 1;
                     },
 
@@ -1581,10 +1583,7 @@ fn main() {
 
     print_op_hash("");
     print_size_of::<i32>("");
-
-    print_size_of::<HeapKind>("HeapKind");
-    print_size_of::<HeapEntry>("HeapEntry");
-
+    
     let start = Instant::now();
     
     let mut lvm = LVM::new(path);

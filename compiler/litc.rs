@@ -315,7 +315,7 @@ fn generate(program: &Program) -> Result<String, Error> {
 
     for f in &program.functions {
         out.push_str(&format!("label {}:\n", f.name));
-        let mut symbol_idx: HashMap<String, String> = HashMap::new();
+        let mut variables: HashMap<String, String> = HashMap::new();
 
         for stmt in &f.body {
             match stmt {
@@ -335,7 +335,7 @@ fn generate(program: &Program) -> Result<String, Error> {
                     }
 
                     out.push_str(&format!("    store_var {}\n", name));
-                    symbol_idx.insert(name.clone(), dtype.clone());
+                    variables.insert(name.clone(), dtype.clone());
                 }
 
                 Stmt::Print(expr) => {
@@ -349,10 +349,10 @@ fn generate(program: &Program) -> Result<String, Error> {
                             out.push_str(&format!("    push_const str \"{}\"\n", esc));
                             out.push_str("    print str\n");
                         }
-                        Expr::Var(i) => {
+                        Expr::Var(ident) => {
                             out.push_str(&format!("    load_var {}\n", i));
 
-                            if let Some(dtype) = symbol_idx.get(i) {
+                            if let Some(dtype) = variables.get(ident) {
                                 match dtype.as_str() {
                                     "unt" => out.push_str("    print unt\n"),
                                     "int" => out.push_str("    print int\n"),
@@ -399,7 +399,7 @@ fn main() -> Result<(), Error> {
     let program = parser.parse_program()?;
 
     check_program(&program)?;
-
+    
     let bytecode = generate(&program);
 
     let path = path.replace(".lit", ".lbc");
