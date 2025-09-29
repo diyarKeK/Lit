@@ -29,7 +29,7 @@ enum HeapKind {
     Num,
     Str,
     Array,
-    Object { class_hash: u32, field_count: usize },
+    Object { class_hash: u64, field_count: usize },
 }
 
 impl HeapKind {
@@ -51,10 +51,27 @@ struct HeapEntry {
     kind: HeapKind,
 }
 
+/*
+#[derive(Debug, Clone)]
+struct Frame {
+    this: Option<u64>,
+    locals: HashMap<String, u64>,
+}
+
+impl Frame {
+    fn new() -> Frame {
+        Frame {
+            locals: HashMap::new(),
+            this: None,
+        }
+    }
+}
+*/
+
 #[derive(Debug, Clone)]
 struct LVM {
     call_stack: Vec<usize>,
-    classes: HashMap<u32, ClassInfo>,
+    classes: HashMap<u64, ClassInfo>,
     class_positions: HashMap<String, usize>,
     frame_stack: Vec<HashMap<String, u64>>,
     heap: HashMap<u64, HeapEntry>,
@@ -90,6 +107,15 @@ impl LVM {
         for b in s.as_bytes() {
             h ^= *b as u32;
             h = h.wrapping_mul(0x01000193);
+        }
+        h
+    }
+
+    fn class_hash(s: &str) -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for b in s.as_bytes() {
+            h ^= *b as u64;
+            h = h.wrapping_mul(0x100000001b32);
         }
         h
     }
@@ -162,7 +188,7 @@ impl LVM {
         }
     }
 
-    fn alloc_object(&mut self, class_hash: u32, field_count: usize) -> u64 {
+    fn alloc_object(&mut self, class_hash: u64, field_count: usize) -> u64 {
         let size = field_count.checked_mul(8).unwrap();
         let align = 8usize;
 
@@ -393,7 +419,7 @@ impl LVM {
     }
 
     fn load_class_if_needed(&mut self, class_name: String) {
-        let class_hash = LVM::opcode_hash(&class_name);
+        let class_hash = LVM::class_hash(&class_name);
 
         if self.classes.contains_key(&class_hash) {
             return;
@@ -1163,7 +1189,7 @@ impl LVM {
                 }
 
                 let class_name = args[0].clone();
-                let class_hash = LVM::opcode_hash(&class_name);
+                let class_hash = LVM::class_hash(&class_name);
                 let init_label = args[1].clone();
 
                 self.load_class_if_needed(class_name.clone());
