@@ -21,7 +21,6 @@ struct Instruction {
 struct ClassInfo {
     class: String,
     fields: Vec<String>,
-    methods: HashMap<String, usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,23 +50,6 @@ struct HeapEntry {
     kind: HeapKind,
 }
 
-/*
-#[derive(Debug, Clone)]
-struct Frame {
-    this: Option<u64>,
-    locals: HashMap<String, u64>,
-}
-
-impl Frame {
-    fn new() -> Frame {
-        Frame {
-            locals: HashMap::new(),
-            this: None,
-        }
-    }
-}
-*/
-
 #[derive(Debug, Clone)]
 struct LVM {
     call_stack: Vec<usize>,
@@ -81,7 +63,6 @@ struct LVM {
     next_heap_id: u64,
     path: String,
     stack: Vec<u64>,
-    this: Option<u64>,
 }
 
 impl LVM {
@@ -98,7 +79,6 @@ impl LVM {
             next_heap_id: 1,
             path,
             stack: Vec::new(),
-            this: None,
         }
     }
 
@@ -407,7 +387,11 @@ impl LVM {
                     panic!("At {}:{}:\n    {}\nclass expects 1 argument;\nUsage: class <name>", self.path, idx, instr.raw)
                 }
 
-                let name = instr.args[0].clone();
+                let mut name = instr.args[0].clone();
+
+                if name.ends_with(':') {
+                    name.pop();
+                }
 
                 if self.class_positions.contains_key(&name) {
                     panic!("Class: \"{}\" already defined, at {}:{}:\n    {}", name, self.path, idx, instr.raw)
@@ -447,7 +431,6 @@ impl LVM {
                     let info = ClassInfo {
                         class: class_name.clone(),
                         fields: Vec::new(),
-                        methods: HashMap::new(),
                     };
 
                     self.classes.insert(class_hash, info);
@@ -463,20 +446,6 @@ impl LVM {
                     self.classes.get_mut(&class_hash).unwrap()
                         .fields.push(name);
                 },
-
-/* method */    2873489200 => {
-                    if args.len() != 2 {
-                        panic!("At {}:{}:\n    {}\nmethod requires 2 arguments;\nUsage: method <name> <label>", self.path, idx, raw)
-                    }
-
-                    let name = args[0].clone();
-                    let label = args[1].clone();
-
-                    let pos = self.get_label(&label);
-
-                    self.classes.get_mut(&class_hash).unwrap()
-                        .methods.insert(name, pos);
-                }
 
 /* end_class */ 3642054705 => break,
 
@@ -1203,9 +1172,9 @@ impl LVM {
                     self.write_u64_at(obj_id, i, 0);
                 }
 
+                self.push_u64(obj_id);
                 self.call_stack.push(self.ip);
                 self.frame_stack.push(HashMap::new());
-                self.this = Some(obj_id);
                 self.ip = self.get_label(&init_label) + 1;
             },
 
@@ -1255,43 +1224,6 @@ impl LVM {
 
                         let v = self.read_u64_at(obj_ref, idx);
                         self.push_u64(v);
-                    },
-
-                    _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw)
-                }
-            },
-
-/* load_this */24959186 => {
-                if let Some(obj_ref) = self.this {
-                    self.push_ref(obj_ref);
-                } else {
-                    panic!("load_this outside of object context, at {}:{}:\n    {}", self.path, line_idx, raw);
-                }
-            },
-
-/* call_method */3397513247 => {
-                if args.len() != 1 {
-                    panic!("At {}:{}:\n    {}\ncall_method requires 1 argument;\nUsage: call_method <method>", self.path, line_idx, raw);
-                }
-
-                let method_name = args[0].clone();
-                let obj_ref = self.pop_slot();
-
-                let entry = self.heap.get(&obj_ref)
-                    .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
-
-                match &entry.kind {
-                    HeapKind::Object { class_hash, field_count: _ } => {
-                        let class_info = self.classes.get(&class_hash).unwrap();
-
-                        let label = class_info.methods.get(&method_name)
-                            .unwrap_or_else(|| panic!("Method: {} is not found in class: {}, at {}:{}:\n    {}", method_name, class_info.class, self.path, line_idx, raw))
-                            .clone();
-
-                        self.call_stack.push(self.ip);
-                        self.frame_stack.push(HashMap::new());
-                        self.this = Some(obj_ref);
-                        self.ip = label + 1;
                     },
 
                     _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw)
