@@ -24,30 +24,11 @@ struct ClassInfo {
 }
 
 #[derive(Debug, Clone)]
-enum HeapKind {
-    Num,
-    Str,
-    Array,
-    Object { class_hash: u64, field_count: usize },
-}
-
-impl HeapKind {
-    fn to_string(&self) -> &str {
-        match self {
-            HeapKind::Num => "num",
-            HeapKind::Str => "str",
-            HeapKind::Array => "array",
-            HeapKind::Object { .. } => "object",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 struct HeapEntry {
     ptr: *mut u8,
     size: usize,
     align: usize,
-    kind: HeapKind,
+    kind: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -100,7 +81,7 @@ impl LVM {
         h
     }
 
-    fn alloc_heap_bytes(&mut self, size: usize, align: usize, kind: HeapKind) -> u64 {
+    fn alloc_heap_bytes(&mut self, size: usize, align: usize, kind: u8) -> u64 {
         let layout = Layout::from_size_align(size, align).unwrap();
         unsafe {
             let ptr = alloc(layout);
@@ -169,14 +150,15 @@ impl LVM {
     }
 
     fn alloc_object(&mut self, class_hash: u64, field_count: usize) -> u64 {
-        let size = field_count.checked_mul(8).unwrap();
+        let size = 16 + field_count * 8;
         let align = 8usize;
 
-        let obj = HeapKind::Object {
-            class_hash,
-            field_count,
-        };
-        self.alloc_heap_bytes(size, align, obj)
+        let id = self.alloc_heap_bytes(size, align, 4);
+
+        self.write_u64_at(id, 0, class_hash);
+        self.write_u64_at(id, 1, field_count as u64);
+
+        id
     }
 
     fn alloc_array(&mut self, len: usize) -> u64 {
@@ -187,7 +169,7 @@ impl LVM {
 
         let size = 8 + len * 8;
 
-        let id = self.alloc_heap_bytes(size, 8, HeapKind::Array);
+        let id = self.alloc_heap_bytes(size, 8, 3);
         self.write_u64_at(id, 0, len as u64);
 
         for i in 0..len {
@@ -206,7 +188,7 @@ impl LVM {
             total += 8 - (total % 8);
         }
 
-        let id = self.alloc_heap_bytes(total, 8, HeapKind::Str);
+        let id = self.alloc_heap_bytes(total, 8, 2);
         self.write_u64_at(id, 0, len as u64);
 
         unsafe {
@@ -225,7 +207,7 @@ impl LVM {
     }
 
     fn alloc_num(&mut self, v: u64) -> u64 {
-        let id = self.alloc_heap_bytes(8, 8, HeapKind::Num);
+        let id = self.alloc_heap_bytes(8, 8, 1);
         self.write_u64_at(id, 0, v);
         id
     }
@@ -235,7 +217,7 @@ impl LVM {
             .unwrap_or_else(|| panic!("read_string:\n    Id: {} not found in heap", id));
 
         match entry.kind {
-            HeapKind::Str => {
+            2 => {
                 let len = self.read_u64_at(id, 0) as usize;
 
                 unsafe {
@@ -658,7 +640,7 @@ impl LVM {
 
                 let total = len_a + len_b;
 
-                let id = self.alloc_heap_bytes(8 + total, 8, HeapKind::Str);
+                let id = self.alloc_heap_bytes(8 + total, 8, 2);
                 self.write_u64_at(id, 0, total as u64);
 
                 unsafe {
@@ -693,7 +675,7 @@ impl LVM {
                 };
 
                 match entry_s.kind {
-                    HeapKind::Str => {
+                    2 => {
                         let len_s = self.read_u64_at(s, 0) as usize;
 
                         if idx >= len_s {
@@ -718,7 +700,7 @@ impl LVM {
                 let idx = self.pop_slot() as usize;
 
                 match entry_s.kind {
-                    HeapKind::Str => {
+                    2 => {
                         let len_s = self.read_u64_at(s, 0) as usize;
 
                         if idx >= len_s {
@@ -742,7 +724,7 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw));
 
                 match entry.kind {
-                    HeapKind::Str => {
+                    2 => {
                         let len = self.read_u64_at(s, 0);
                         self.push_u64(len);
                     }
@@ -758,7 +740,7 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
 
                 match entry.kind {
-                    HeapKind::Str => {
+                    2 => {
                         let len = self.read_u64_at(s, 0) as usize;
 
                         let bytes_id = self.alloc_array(len);
@@ -852,7 +834,7 @@ impl LVM {
 
                 let len = self.read_u64_at(s, 0) as usize;
 
-                let id = self.alloc_heap_bytes(8 + len, 8, HeapKind::Str);
+                let id = self.alloc_heap_bytes(8 + len, 8, 2);
                 self.write_u64_at(id, 0, len as u64);
 
                 unsafe {
@@ -882,7 +864,7 @@ impl LVM {
 
                 let len = self.read_u64_at(s, 0) as usize;
 
-                let id = self.alloc_heap_bytes(8 + len, 8, HeapKind::Str);
+                let id = self.alloc_heap_bytes(8 + len, 8, 2);
                 self.write_u64_at(id, 0, len as u64);
 
                 unsafe {
@@ -986,19 +968,19 @@ impl LVM {
 
                 match kind {
 
-                    HeapKind::Num => {
+                    1 => {
                         let num = self.read_u64_at(reference, 0);
                         let new_id = self.alloc_num(num);
                         self.push_ref(new_id);
                     }
 
-                    HeapKind::Str => {
+                    2 => {
                         let s = self.read_string(reference);
                         let new_id = self.alloc_str(&s);
                         self.push_ref(new_id);
                     }
 
-                    HeapKind::Array => {
+                    3 => {
                         let len = self.read_u64_at(reference, 0) as usize;
                         let new_id = self.alloc_array(len);
 
@@ -1009,7 +991,10 @@ impl LVM {
                         self.push_ref(new_id);
                     }
 
-                    HeapKind::Object { class_hash, field_count } => {
+                    4 => {
+                        let class_hash = self.read_u64_at(reference, 0);
+                        let field_count = self.read_u64_at(reference, 1) as usize;
+
                         let new_id = self.alloc_object(class_hash, field_count);
 
                         for i in 0..field_count {
@@ -1019,6 +1004,8 @@ impl LVM {
 
                         self.push_ref(new_id);
                     }
+
+                    _ => {}
                 }
             },
 
@@ -1041,43 +1028,50 @@ impl LVM {
                             let entry = self.heap.get(&val)
                                 .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw));
 
-                            match &entry.kind {
+                            match entry.kind {
 
-                                HeapKind::Num => {
+                                1 => {
                                     let v = self.read_u64_at(val, 0);
                                     println!("{}", v);
                                 },
 
-                                HeapKind::Str => {
+                                2 => {
                                     let s = self.read_string(val);
                                     println!("{}", s);
                                 },
 
-                                HeapKind::Array => {
+                                3 => {
                                     let mut items = Vec::new();
                                     let len = self.read_u64_at(val, 0) as usize;
 
-                                    for i in 0..len {
+                                    for i in 1..len+1 {
                                         let v = self.read_u64_at(val, i);
                                         items.push(format!("{}", v));
                                     }
+
                                     println!("[{}]", items.join(", "))
                                 },
 
-                                HeapKind::Object { class_hash, field_count } => {
+                                4 => {
+
+                                    let class_hash = self.read_u64_at(val, 0);
+                                    let field_count = self.read_u64_at(val, 1) as usize;
 
                                     print!("{} {{ ", self.classes.get(&class_hash).unwrap().class);
 
                                     let mut parts = Vec::new();
 
-                                    for i in 0..*field_count {
+                                    for i in 2..field_count+2 {
                                         let v = self.read_u64_at(val, i);
                                         parts.push(format!("f{}: {}", i, v));
                                     }
 
+
                                     print!("{}", parts.join(", "));
                                     println!(" }}");
                                 },
+
+                                _ => {}
                             }
                         },
                         _ => panic!("Unknown type: {}, at {}:{}:\n    {}", args[0], self.path, line_idx, raw)
@@ -1169,7 +1163,7 @@ impl LVM {
                 let obj_id = self.alloc_object(class_hash, field_count);
 
                 for i in 0..field_count {
-                    self.write_u64_at(obj_id, i, 0);
+                    self.write_u64_at(obj_id, i + 2, 0);
                 }
 
                 self.push_u64(obj_id);
@@ -1191,13 +1185,15 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { class_hash, field_count: _ } => {
+                    4 => {
+                        let class_hash = self.read_u64_at(obj_ref, 0);
+
                         let class_info = self.classes.get(&class_hash).unwrap();
                         let idx = class_info.fields.iter()
                             .position(|n| n == &field_name)
                             .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_info.class, self.path, line_idx, raw));
 
-                        self.write_u64_at(obj_ref, idx, val);
+                        self.write_u64_at(obj_ref, idx + 2, val);
                     },
 
                     _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw),
@@ -1216,13 +1212,15 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Object { class_hash, field_count: _ } => {
+                    4 => {
+                        let class_hash = self.read_u64_at(obj_ref, 0);
+
                         let class_info = self.classes.get(&class_hash).unwrap();
                         let idx = class_info.fields.iter()
                             .position(|n| n == &field_name)
                             .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_info.class, self.path, line_idx, raw));
 
-                        let v = self.read_u64_at(obj_ref, idx);
+                        let v = self.read_u64_at(obj_ref, idx + 2);
                         self.push_u64(v);
                     },
 
@@ -1252,7 +1250,7 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Array => {
+                    3 => {
                         let len = self.read_u64_at(arr_ref, 0) as usize;
 
                         if idx >= len {
@@ -1274,7 +1272,7 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Array => {
+                    3 => {
                         let len = self.read_u64_at(arr_ref, 0) as usize;
 
                         if idx >= len {
@@ -1297,7 +1295,7 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found array reference: {} in heap, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw));
 
                 match &entry.kind {
-                    HeapKind::Array => {
+                    3 => {
                         let len = self.read_u64_at(arr_ref, 0);
                         self.push_u64(len);
                     },
