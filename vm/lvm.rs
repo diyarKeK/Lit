@@ -27,7 +27,6 @@ struct ClassInfo {
 struct HeapEntry {
     ptr: *mut u8,
     size: usize,
-    align: usize,
     kind: u8,
 }
 
@@ -81,8 +80,8 @@ impl LVM {
         h
     }
 
-    fn alloc_heap_bytes(&mut self, size: usize, align: usize, kind: u8) -> u64 {
-        let layout = Layout::from_size_align(size, align).unwrap();
+    fn alloc_heap_bytes(&mut self, size: usize, kind: u8) -> u64 {
+        let layout = Layout::from_size_align(size, 8).unwrap();
         unsafe {
             let ptr = alloc(layout);
             if ptr.is_null() {
@@ -98,7 +97,6 @@ impl LVM {
                 HeapEntry {
                     ptr,
                     size,
-                    align,
                     kind,
                 }
             );
@@ -110,7 +108,7 @@ impl LVM {
     fn free_heap_bytes(&mut self, id: u64) {
         if let Some(entry) = self.heap.remove(&id) {
 
-            let layout = Layout::from_size_align(entry.size, entry.align).unwrap();
+            let layout = Layout::from_size_align(entry.size, 8).unwrap();
             unsafe {
                 dealloc(entry.ptr, layout);
             }
@@ -151,9 +149,8 @@ impl LVM {
 
     fn alloc_object(&mut self, class_hash: u64, field_count: usize) -> u64 {
         let size = 16 + field_count * 8;
-        let align = 8usize;
 
-        let id = self.alloc_heap_bytes(size, align, 4);
+        let id = self.alloc_heap_bytes(size, 4);
 
         self.write_u64_at(id, 0, class_hash);
         self.write_u64_at(id, 1, field_count as u64);
@@ -169,7 +166,7 @@ impl LVM {
 
         let size = 8 + len * 8;
 
-        let id = self.alloc_heap_bytes(size, 8, 3);
+        let id = self.alloc_heap_bytes(size, 3);
         self.write_u64_at(id, 0, len as u64);
 
         for i in 0..len {
@@ -188,7 +185,7 @@ impl LVM {
             total += 8 - (total % 8);
         }
 
-        let id = self.alloc_heap_bytes(total, 8, 2);
+        let id = self.alloc_heap_bytes(total, 2);
         self.write_u64_at(id, 0, len as u64);
 
         unsafe {
@@ -207,7 +204,7 @@ impl LVM {
     }
 
     fn alloc_num(&mut self, v: u64) -> u64 {
-        let id = self.alloc_heap_bytes(8, 8, 1);
+        let id = self.alloc_heap_bytes(8, 1);
         self.write_u64_at(id, 0, v);
         id
     }
@@ -640,7 +637,7 @@ impl LVM {
 
                 let total = len_a + len_b;
 
-                let id = self.alloc_heap_bytes(8 + total, 8, 2);
+                let id = self.alloc_heap_bytes(8 + total, 2);
                 self.write_u64_at(id, 0, total as u64);
 
                 unsafe {
@@ -834,7 +831,7 @@ impl LVM {
 
                 let len = self.read_u64_at(s, 0) as usize;
 
-                let id = self.alloc_heap_bytes(8 + len, 8, 2);
+                let id = self.alloc_heap_bytes(8 + len, 2);
                 self.write_u64_at(id, 0, len as u64);
 
                 unsafe {
@@ -864,7 +861,7 @@ impl LVM {
 
                 let len = self.read_u64_at(s, 0) as usize;
 
-                let id = self.alloc_heap_bytes(8 + len, 8, 2);
+                let id = self.alloc_heap_bytes(8 + len, 2);
                 self.write_u64_at(id, 0, len as u64);
 
                 unsafe {
