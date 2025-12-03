@@ -927,7 +927,7 @@ impl LVM {
                     }
 
                     3 => {
-                        let len = entry.size;
+                        let len = entry.size / 8;
                         let new_id = self.alloc_array(len);
 
                         for i in 0..len {
@@ -939,11 +939,11 @@ impl LVM {
 
                     4 => {
                         let class_hash = self.read_u64_at(reference, 0);
-                        let field_count = entry.size - 1;
+                        let field_count = entry.size / 8 - 8;
 
                         let new_id = self.alloc_object(class_hash, field_count);
 
-                        for i in 0..field_count {
+                        for i in 1..field_count+1 {
                             let v = self.read_u64_at(reference, i);
                             self.write_u64_at(new_id, i, v);
                         }
@@ -1002,7 +1002,7 @@ impl LVM {
                                 4 => {
 
                                     let class_hash = self.read_u64_at(val, 0);
-                                    let field_count = entry.size - 1;
+                                    let field_count = entry.size / 8 - 8;
 
                                     print!("{} {{ ", self.classes.get(&class_hash).unwrap().class);
 
