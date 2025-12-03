@@ -360,17 +360,14 @@ impl LVM {
                 }
 
                 self.labels.insert(name, idx);
-/* CLASS */ } else if instr.op == 2872970239 {
+/* STRUCT */ } else if instr.op == 2462236192 {
 
-                if instr.args.len() != 1 {
-                    panic!("At {}:{}:\n    {}\nclass expects 1 argument;\nUsage: class <name>", self.path, idx, instr.raw)
+                if instr.args.len() < 1 {
+                    panic!("At {}:{}:\n    {}\nclass expects as minimum 1 argument;\nUsage: struct <name>: [field1], [field2], ...", self.path, idx, instr.raw)
                 }
 
                 let mut name = instr.args[0].clone();
-
-                if name.ends_with(':') {
-                    name.pop();
-                }
+                name.pop();
 
                 if self.class_positions.contains_key(&name) {
                     panic!("Class: \"{}\" already defined, at {}:{}:\n    {}", name, self.path, idx, instr.raw)
@@ -393,47 +390,15 @@ impl LVM {
             None => panic!("Class: {} is not found, at {}:{}", class_name, self.path, self.ip)
         };
 
-        let mut idx = start_idx;
+        let mut args = self.instructions[start_idx].args.clone();
+        args.remove(0);
 
-        while idx < self.instructions.len() {
-            let instr = &self.instructions[idx];
-            let op = instr.op.clone();
-            let args = instr.args.clone();
-            let raw = instr.raw.clone();
+        let info = ClassInfo {
+            class: class_name.clone(),
+            fields: args,
+        };
 
-            match op {
-/* class */     2872970239 => {
-                    if args.len() != 1 {
-                        panic!("At {}:{}:\n    {}\nclass requires 1 argument;\nUsage: class <name>", self.path, idx, raw)
-                    }
-
-                    let info = ClassInfo {
-                        class: class_name.clone(),
-                        fields: Vec::new(),
-                    };
-
-                    self.classes.insert(class_hash, info);
-                },
-
-/* field */     1736598119 => {
-                    if args.len() != 1 {
-                        panic!("At {}:{}:\n    {}\nfield requires 1 argument;\nUsage: field <name>", self.path, idx, raw)
-                    }
-
-                    let name = args[0].clone();
-
-                    self.classes.get_mut(&class_hash).unwrap()
-                        .fields.push(name);
-                },
-
-/* end_class */ 3642054705 => break,
-
-                _ =>
-                    panic!("Unknown OOP opcode at {}:{}:\n    {}", self.path, idx, instr.raw)
-            };
-
-            idx += 1;
-        }
+        self.classes.insert(class_hash, info);
     }
 
     fn run(&mut self, now: Instant) {
