@@ -148,12 +148,11 @@ impl LVM {
     }
 
     fn alloc_object(&mut self, class_hash: u64, field_count: usize) -> u64 {
-        let size = 16 + field_count * 8;
+        let size = 8 + field_count * 8;
 
         let id = self.alloc_heap_bytes(size, 4);
 
         self.write_u64_at(id, 0, class_hash);
-        self.write_u64_at(id, 1, field_count as u64);
 
         id
     }
@@ -164,13 +163,12 @@ impl LVM {
             panic!("Array length too big: {}!\nAt {}:{}:\n    {}", len, self.path, info.line_idx, info.raw);
         }
 
-        let size = 8 + len * 8;
+        let size = len * 8;
 
         let id = self.alloc_heap_bytes(size, 3);
-        self.write_u64_at(id, 0, len as u64);
 
         for i in 0..len {
-            self.write_u64_at(id, i + 1, 0);
+            self.write_u64_at(id, i, 0);
         }
 
         id
@@ -179,24 +177,22 @@ impl LVM {
     fn alloc_str(&mut self, s: &str) -> u64 {
         let bytes = s.as_bytes();
         let len = bytes.len();
-        let mut total = 8 + len;
+        let mut total = len;
 
         if total % 8 != 0 {
             total += 8 - (total % 8);
         }
 
         let id = self.alloc_heap_bytes(total, 2);
-        self.write_u64_at(id, 0, len as u64);
 
         unsafe {
             let entry = self.heap.get(&id).unwrap();
-            let dest = entry.ptr.add(8);
-            ptr::copy_nonoverlapping(bytes.as_ptr(), dest, len);
+            ptr::copy_nonoverlapping(bytes.as_ptr(), entry.ptr, len);
 
-            let pad = total - 8 - len;
+            let pad = total - len;
 
             if pad > 0 {
-                ptr::write_bytes(dest.add(len), 0, pad);
+                ptr::write_bytes(entry.ptr.add(len), 0, pad);
             }
         }
 
@@ -215,11 +211,8 @@ impl LVM {
 
         match entry.kind {
             2 => {
-                let len = self.read_u64_at(id, 0) as usize;
-
                 unsafe {
-                    let src = entry.ptr.add(8);
-                    let slice = slice::from_raw_parts(src, len);
+                    let slice = slice::from_raw_parts(entry.ptr, entry.size);
                     String::from_utf8_lossy(slice).into_owned()
                 }
             },
@@ -597,22 +590,21 @@ impl LVM {
                     .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", a, self.path, line_idx, raw)).clone();
 
 
-                let len_b = self.read_u64_at(b, 0) as usize;
-                let len_a = self.read_u64_at(a, 0) as usize;
+                let len_b = entry_b.size;
+                let len_a = entry_a.size;
 
                 let total = len_a + len_b;
 
-                let id = self.alloc_heap_bytes(8 + total, 2);
-                self.write_u64_at(id, 0, total as u64);
+                let id = self.alloc_heap_bytes(total, 2);
 
                 unsafe {
                     let entry = self.heap.get(&id).unwrap();
-                    let dest = entry.ptr.add(8);
+                    let dest = entry.ptr;
 
-                    let src_a = entry_a.ptr.add(8);
+                    let src_a = entry_a.ptr;
                     ptr::copy_nonoverlapping(src_a, dest, len_a);
 
-                    let src_b = entry_b.ptr.add(8);
+                    let src_b = entry_b.ptr;
                     ptr::copy_nonoverlapping(src_b, dest.add(len_a), len_b);
                 }
 
@@ -638,14 +630,14 @@ impl LVM {
 
                 match entry_s.kind {
                     2 => {
-                        let len_s = self.read_u64_at(s, 0) as usize;
+                        let len_s = entry_s.size;
 
                         if idx >= len_s {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len_s, self.path, line_idx, raw);
                         }
 
                         unsafe {
-                            let dest = entry_s.ptr.add(8);
+                            let dest = entry_s.ptr;
                             ptr::write(dest.add(idx), sym);
                         }
                     }
@@ -663,14 +655,14 @@ impl LVM {
 
                 match entry_s.kind {
                     2 => {
-                        let len_s = self.read_u64_at(s, 0) as usize;
+                        let len_s = entry_s.size;
 
                         if idx >= len_s {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len_s, self.path, line_idx, raw);
                         }
 
                         unsafe {
-                            let src = entry_s.ptr.add(8);
+                            let src = entry_s.ptr;
                             self.push_u64(*src.add(idx) as u64)
                         }
                     }
@@ -687,7 +679,7 @@ impl LVM {
 
                 match entry.kind {
                     2 => {
-                        let len = self.read_u64_at(s, 0);
+                        let len = entry.size as u64;
                         self.push_u64(len);
                     }
 
@@ -703,16 +695,16 @@ impl LVM {
 
                 match entry.kind {
                     2 => {
-                        let len = self.read_u64_at(s, 0) as usize;
+                        let len = entry.size;
 
                         let bytes_id = self.alloc_array(len);
 
                         unsafe {
-                            let src = entry.ptr.add(8);
+                            let src = entry.ptr;
 
                             for i in 0..len {
                                 let b = *src.add(i);
-                                self.write_u64_at(bytes_id, i + 1, b as u64);
+                                self.write_u64_at(bytes_id, i, b as u64);
                             }
                         }
 
@@ -732,8 +724,8 @@ impl LVM {
                 let entry_a = self.heap.get(&a)
                     .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", a, self.path, line_idx, raw));
 
-                let len_b = self.read_u64_at(a, 0) as usize;
-                let len_a = self.read_u64_at(a, 0) as usize;
+                let len_b = entry_b.size;
+                let len_a = entry_a.size;
 
                 if len_a != len_b {
                     self.push_u64(0);
@@ -741,8 +733,8 @@ impl LVM {
                     let mut equal = true;
 
                     unsafe {
-                        let src_a = entry_a.ptr.add(8);
-                        let src_b = entry_b.ptr.add(8);
+                        let src_a = entry_a.ptr;
+                        let src_b = entry_b.ptr;
 
                         for i in 0..len_a {
                             if *src_a.add(i) != *src_b.add(i) {
@@ -765,8 +757,8 @@ impl LVM {
                 let entry_a = self.heap.get(&a)
                     .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", a, self.path, line_idx, raw));
 
-                let len_b = self.read_u64_at(a, 0) as usize;
-                let len_a = self.read_u64_at(a, 0) as usize;
+                let len_b = entry_b.size;
+                let len_a = entry_a.size;
 
                 if len_a != len_b {
                     self.push_u64(1);
@@ -774,8 +766,8 @@ impl LVM {
                     let mut not_equal = false;
 
                     unsafe {
-                        let src_a = entry_a.ptr.add(8);
-                        let src_b = entry_b.ptr.add(8);
+                        let src_a = entry_a.ptr;
+                        let src_b = entry_b.ptr;
 
                         for i in 0..len_a {
                             if *src_a.add(i) != *src_b.add(i) {
@@ -794,16 +786,13 @@ impl LVM {
                 let entry = self.heap.get(&s)
                     .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
 
-                let len = self.read_u64_at(s, 0) as usize;
+                let len = entry.size;
 
-                let id = self.alloc_heap_bytes(8 + len, 2);
-                self.write_u64_at(id, 0, len as u64);
+                let id = self.alloc_heap_bytes(len, 2);
 
                 unsafe {
-                    let src = entry.ptr.add(8);
-
-                    let dest_entry = self.heap.get(&id).unwrap();
-                    let dest = dest_entry.ptr.add(8);
+                    let src = entry.ptr;
+                    let dest = self.heap.get(&id).unwrap().ptr;
 
                     for i in 0..len {
                         let ch = *src.add(i);
@@ -824,16 +813,13 @@ impl LVM {
                 let entry = self.heap.get(&s)
                     .unwrap_or_else(|| panic!("Cannot found string ref: {} in heap, at {}:{}:\n    {}", s, self.path, line_idx, raw)).clone();
 
-                let len = self.read_u64_at(s, 0) as usize;
+                let len = entry.size;
 
-                let id = self.alloc_heap_bytes(8 + len, 2);
-                self.write_u64_at(id, 0, len as u64);
+                let id = self.alloc_heap_bytes(len, 2);
 
                 unsafe {
-                    let src = entry.ptr.add(8);
-
-                    let dest_entry = self.heap.get(&id).unwrap();
-                    let dest = dest_entry.ptr.add(8);
+                    let src = entry.ptr;
+                    let dest = self.heap.get(&id).unwrap().ptr;
 
                     for i in 0..len {
                         let ch = *src.add(i);
@@ -921,12 +907,10 @@ impl LVM {
 /* clone */ 730356610 => {
                 let reference = self.pop_slot();
 
-                let kind = {
-                    let entry = self.heap.get(&reference)
-                        .unwrap_or_else(|| panic!("Cannot found ref: {} in heap, at {}:{}:\n    {}", reference, self.path, line_idx, raw)).clone();
+                let entry = self.heap.get(&reference)
+                    .unwrap_or_else(|| panic!("Cannot found ref: {} in heap, at {}:{}:\n    {}", reference, self.path, line_idx, raw)).clone();
 
-                    entry.kind.clone()
-                };
+                let kind = entry.kind;
 
                 match kind {
 
@@ -943,7 +927,7 @@ impl LVM {
                     }
 
                     3 => {
-                        let len = self.read_u64_at(reference, 0) as usize;
+                        let len = entry.size;
                         let new_id = self.alloc_array(len);
 
                         for i in 0..len {
@@ -955,7 +939,7 @@ impl LVM {
 
                     4 => {
                         let class_hash = self.read_u64_at(reference, 0);
-                        let field_count = self.read_u64_at(reference, 1) as usize;
+                        let field_count = entry.size - 1;
 
                         let new_id = self.alloc_object(class_hash, field_count);
 
@@ -986,6 +970,7 @@ impl LVM {
                 /* int */2515107422 => println!("{}", val as i64),
                 /* float */2797886853 => println!("{}", f64::from_bits(val)),
                 /* char */2823553821 => println!("{}", val as u8 as char),
+                /* bool */3365180733 => println!("{}", if val == 0 { "false" } else { "true" }),
                 /* ref */1123320834 => {
                             let entry = self.heap.get(&val)
                                 .unwrap_or_else(|| panic!("Cannot found object reference: {} in heap, at {}:{}:\n    {}", val, self.path, line_idx, raw));
@@ -1004,9 +989,9 @@ impl LVM {
 
                                 3 => {
                                     let mut items = Vec::new();
-                                    let len = self.read_u64_at(val, 0) as usize;
+                                    let len = entry.size / 8;
 
-                                    for i in 1..len+1 {
+                                    for i in 0..len {
                                         let v = self.read_u64_at(val, i);
                                         items.push(format!("{}", v));
                                     }
@@ -1017,13 +1002,13 @@ impl LVM {
                                 4 => {
 
                                     let class_hash = self.read_u64_at(val, 0);
-                                    let field_count = self.read_u64_at(val, 1) as usize;
+                                    let field_count = entry.size - 1;
 
                                     print!("{} {{ ", self.classes.get(&class_hash).unwrap().class);
 
                                     let mut parts = Vec::new();
 
-                                    for i in 2..field_count+2 {
+                                    for i in 1..field_count+1 {
                                         let v = self.read_u64_at(val, i);
                                         parts.push(format!("f{}: {}", i, v));
                                     }
@@ -1124,8 +1109,8 @@ impl LVM {
 
                 let obj_id = self.alloc_object(class_hash, field_count);
 
-                for i in 0..field_count {
-                    self.write_u64_at(obj_id, i + 2, 0);
+                for i in 1..field_count+1 {
+                    self.write_u64_at(obj_id, i, 0);
                 }
 
                 self.push_u64(obj_id);
@@ -1155,7 +1140,7 @@ impl LVM {
                             .position(|n| n == &field_name)
                             .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_info.class, self.path, line_idx, raw));
 
-                        self.write_u64_at(obj_ref, idx + 2, val);
+                        self.write_u64_at(obj_ref, idx + 1, val);
                     },
 
                     _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw),
@@ -1182,7 +1167,7 @@ impl LVM {
                             .position(|n| n == &field_name)
                             .unwrap_or_else(|| panic!("field: {} is not found in Class: {}, at {}:{}:\n    {}", field_name, class_info.class, self.path, line_idx, raw));
 
-                        let v = self.read_u64_at(obj_ref, idx + 2);
+                        let v = self.read_u64_at(obj_ref, idx + 1);
                         self.push_u64(v);
                     },
 
@@ -1213,13 +1198,13 @@ impl LVM {
 
                 match &entry.kind {
                     3 => {
-                        let len = self.read_u64_at(arr_ref, 0) as usize;
+                        let len = entry.size;
 
                         if idx >= len {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
-                        self.write_u64_at(arr_ref, idx + 1, val);
+                        self.write_u64_at(arr_ref, idx, val);
                     },
 
                     _ => panic!("Not an Array: {}, at {}:{}:\n    {}", arr_ref, self.path, line_idx, raw)
@@ -1235,13 +1220,13 @@ impl LVM {
 
                 match &entry.kind {
                     3 => {
-                        let len = self.read_u64_at(arr_ref, 0) as usize;
+                        let len = entry.size;
 
                         if idx >= len {
                             panic!("Index out of bounds:\n    index={}, length={}\n at {}:{}:\n    {}", idx, len, self.path, line_idx, raw)
                         }
 
-                        let val = self.read_u64_at(arr_ref, idx + 1);
+                        let val = self.read_u64_at(arr_ref, idx);
                         self.push_u64(val);
                     },
 
@@ -1258,7 +1243,7 @@ impl LVM {
 
                 match &entry.kind {
                     3 => {
-                        let len = self.read_u64_at(arr_ref, 0);
+                        let len = (entry.size / 8) as u64;
                         self.push_u64(len);
                     },
 
@@ -1408,7 +1393,7 @@ impl LVM {
 
                 let cond = self.pop_slot();
 
-                if cond != 1 {
+                if cond == 0 {
                     let label_name = args[0].clone();
 
                     self.ip = self.get_label(&label_name) + 1;
