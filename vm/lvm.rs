@@ -28,6 +28,7 @@ struct HeapEntry {
     ptr: *mut u8,
     size: usize,
     kind: u8,
+    is_marked: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -35,7 +36,9 @@ struct LVM {
     call_stack: Vec<usize>,
     classes: HashMap<u64, ClassInfo>,
     class_positions: HashMap<String, usize>,
+    current_heap_usage: usize,
     frame_stack: Vec<HashMap<String, u64>>,
+    gc_threshold: usize,
     heap: HashMap<u64, HeapEntry>,
     instructions: Vec<Instruction>,
     ip: usize,
@@ -51,7 +54,9 @@ impl LVM {
             call_stack: Vec::new(),
             classes: HashMap::new(),
             class_positions: HashMap::new(),
+            current_heap_usage: 0,
             frame_stack: vec![HashMap::new()],
+            gc_threshold: 1024 * 1024,
             heap: HashMap::new(),
             instructions: Vec::new(),
             ip: 0,
@@ -80,7 +85,104 @@ impl LVM {
         h
     }
 
+    fn mark_object(&mut self, id: u64) {
+        let entry = match self.heap.get_mut(&id) {
+            Some(entry) if !entry.is_marked => entry,
+            _ => return,
+        };
+
+        entry.is_marked = true;
+
+        match entry.kind {
+            1 => {},
+            2 => {},
+            3 => {
+                for i in 0..(entry.size / 8) {
+                    let inner_id = self.read_u64_at(id, i);
+
+                    self.mark_object(inner_id);
+                }
+            },
+            4 => {
+                let field_count = entry.size / 8 - 1;
+
+                for i in 1..field_count+1 {
+                    let inner_id = self.read_u64_at(id, i);
+
+                    self.mark_object(inner_id);
+                }
+            },
+            _ => {}
+        }
+    }
+
+    fn gc_sweep(&mut self) {
+        let ids_to_free: Vec<u64> = self.heap
+            .iter()
+            .filter(|(_id, entry)| !entry.is_marked)
+            .map(|(id, _entry)| *id)
+            .collect();
+
+        let mut freed_memory = 0;
+        for id in ids_to_free {
+            if let Some(entry) = self.heap.remove(&id) {
+                unsafe {
+                    let layout = Layout::from_size_align_unchecked(entry.size, 8);
+                    dealloc(entry.ptr, layout);
+                }
+
+                freed_memory += entry.size;
+            }
+        }
+
+        self.current_heap_usage -= freed_memory;
+
+        for entry in self.heap.values_mut() {
+            entry.is_marked = false;
+        }
+
+        println!("[GC] Memory freed: {} Bytes, Heap Usage: {}", freed_memory / 8, self.current_heap_usage);
+    }
+
+    fn get_gc_roots(&self) -> Vec<u64> {
+        let mut roots = Vec::new();
+
+        for &id in &self.stack {
+            roots.push(id);
+        }
+
+        for frame in &self.frame_stack {
+            for &id in frame.values() {
+                roots.push(id);
+            }
+        }
+
+        roots
+    }
+
+    fn collect_garbage(&mut self) {
+        for entry in self.heap.values_mut() {
+            entry.is_marked = false;
+        }
+
+        for id in self.get_gc_roots() {
+            self.mark_object(id);
+        }
+
+        self.gc_sweep();
+    }
+
     fn alloc_heap_bytes(&mut self, size: usize, kind: u8) -> u64 {
+        self.current_heap_usage += size;
+
+        if self.current_heap_usage > self.gc_threshold {
+            self.collect_garbage();
+
+            if self.current_heap_usage > self.gc_threshold {
+                panic!("[GC] heap usage exceeded!");
+            }
+        }
+
         let layout = Layout::from_size_align(size, 8).unwrap();
         unsafe {
             let ptr = alloc(layout);
@@ -98,6 +200,7 @@ impl LVM {
                     ptr,
                     size,
                     kind,
+                    is_marked: false,
                 }
             );
 
@@ -1101,6 +1204,15 @@ impl LVM {
                 process::exit(0);
             },
 
+/* sleep */ 2313861896 => {
+                let time = self.pop_slot();
+                thread::sleep(Duration::from_millis(time));
+            },
+
+/* gc */    1042313471 => {
+                self.collect_garbage()
+            },
+
 /* new */   681154065 => {
                 if args.len() != 2 {
                     panic!("At {}:{}:\n    {}\nnew requires 2 arguments;\nUsage: new <class> <init_label>", self.path, line_idx, raw);
@@ -1181,11 +1293,6 @@ impl LVM {
 
                     _ => panic!("Not a Object: {}, at {}:{}:\n    {}", obj_ref, self.path, line_idx, raw)
                 }
-            },
-
-/* sleep */ 2313861896 => {
-                let time = self.pop_slot();
-                thread::sleep(Duration::from_millis(time));
             },
 
 /* new_array */3719752907 => {
@@ -1447,11 +1554,11 @@ impl LVM {
                     0
                 };
 
-                println!("[Stack]\n{:?}", self.stack);
+                println!("[Stack]: {:?}", self.stack);
                 println!("[Frame-Stack]\n{:?}", self.frame_stack);
                 println!("[Heap]\n{:?}", self.heap);
                 println!("[Classes]\n{:?}", self.classes);
-                println!("Took: {:?}", now.elapsed());
+                println!("Took: {:?}, Heap usage: {}", now.elapsed(), self.current_heap_usage);
 
                 process::exit(code);
             }

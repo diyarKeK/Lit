@@ -350,7 +350,7 @@ fn generate(program: &Program) -> Result<String, Error> {
                             out.push_str("    print str\n");
                         }
                         Expr::Var(ident) => {
-                            out.push_str(&format!("    load_var {}\n", i));
+                            out.push_str(&format!("    load_var {}\n", ident));
 
                             if let Some(dtype) = variables.get(ident) {
                                 match dtype.as_str() {
