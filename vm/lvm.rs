@@ -138,7 +138,7 @@ impl LVM {
         let byte_offset = offset_slots.checked_mul(8).unwrap();
 
         if byte_offset + 8 > entry.size {
-            panic!("read_u64_at:\n    out of bounds read (id: {}, offset: {})", id, offset_slots);
+            panic!("read_u64_at:\n    out of bounds read (id: {}, offset: {}, entry.size: {}, byte_offset: {})", id, offset_slots, entry.size, byte_offset);
         }
 
         unsafe {
@@ -1002,7 +1002,7 @@ impl LVM {
                                 4 => {
 
                                     let class_hash = self.read_u64_at(val, 0);
-                                    let field_count = entry.size / 8 - 8;
+                                    let field_count = entry.size / 8 - 1;
 
                                     print!("{} {{ ", self.classes.get(&class_hash).unwrap().class);
 
@@ -1091,6 +1091,14 @@ impl LVM {
                 self.frame_stack.pop();
 
                 self.ip = label;
+            },
+
+/* throw */ 2054714927 => {
+                let val = self.pop_slot();
+                let msg = self.read_string(val);
+
+                println!("Exception At: {}:{}:{}\n{}", self.path, self.ip, raw, msg);
+                process::exit(0);
             },
 
 /* new */   681154065 => {
