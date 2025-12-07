@@ -9,6 +9,12 @@ use std::alloc::{alloc, dealloc, Layout, handle_alloc_error};
 use std::slice;
 use std::ptr;
 
+mod loader;
+mod utils;
+
+use loader::Loader;
+use utils::Utils;
+
 #[derive(Debug, Clone)]
 struct Instruction {
     op: u32,
@@ -35,7 +41,6 @@ struct HeapEntry {
 struct LVM {
     call_stack: Vec<usize>,
     classes: HashMap<u64, ClassInfo>,
-    class_positions: HashMap<String, usize>,
     current_heap_usage: usize,
     frame_stack: Vec<HashMap<String, u64>>,
     gc_threshold: usize,
@@ -49,40 +54,21 @@ struct LVM {
 }
 
 impl LVM {
-    fn new(path: String) -> LVM {
+    fn new(path: String, instructions: Vec<Instruction>, labels: HashMap<String, usize>, classes: HashMap<u64, ClassInfo>) -> LVM {
         LVM {
             call_stack: Vec::new(),
-            classes: HashMap::new(),
-            class_positions: HashMap::new(),
+            classes,
             current_heap_usage: 0,
             frame_stack: vec![HashMap::new()],
             gc_threshold: 1024 * 1024,
             heap: HashMap::new(),
-            instructions: Vec::new(),
+            instructions,
             ip: 0,
-            labels: HashMap::new(),
+            labels,
             next_heap_id: 1,
             path,
             stack: Vec::new(),
         }
-    }
-
-    fn opcode_hash(s: &str) -> u32 {
-        let mut h: u32 = 0x811c9dc5;
-        for b in s.as_bytes() {
-            h ^= *b as u32;
-            h = h.wrapping_mul(0x01000193);
-        }
-        h
-    }
-
-    fn class_hash(s: &str) -> u64 {
-        let mut h: u64 = 0xcbf29ce484222325;
-        for b in s.as_bytes() {
-            h ^= *b as u64;
-            h = h.wrapping_mul(0x100000001b32);
-        }
-        h
     }
 
     fn mark_object(&mut self, id: u64) {
@@ -141,7 +127,7 @@ impl LVM {
             entry.is_marked = false;
         }
 
-        println!("[GC] Memory freed: {} Bytes, Heap Usage: {}", freed_memory / 8, self.current_heap_usage);
+        println!("[GC] Memory freed: {} bits, Heap Usage: {}", freed_memory, self.current_heap_usage);
     }
 
     fn get_gc_roots(&self) -> Vec<u64> {
@@ -356,147 +342,6 @@ impl LVM {
         }
     }
 
-    fn parse_and_load(&mut self, source: &str) -> Result<(), String> {
-        let mut instructions: Vec<Instruction> = vec![];
-
-        for (i, raw_line) in source.lines().enumerate() {
-            let mut line = raw_line.trim();
-
-            if line.is_empty() {
-                continue;
-            }
-
-            if let Some(idx) = line.find('#') {
-                line = &line[..idx].trim();
-            } else if let Some(idx) = line.find("//") {
-                line = &line[..idx].trim();
-            } else if let Some(idx) = line.find(';') {
-                line = &line[..idx].trim();
-            }
-
-            if line.is_empty() {
-                continue;
-            }
-
-            let mut parts: Vec<String> = vec![];
-            let mut cur = String::new();
-            let mut in_quote = false;
-            let mut chars = line.chars().peekable();
-
-            while let Some(c) = chars.next() {
-                if c == '"' {
-                    in_quote = !in_quote;
-                    cur.push(c);
-                    while in_quote {
-                        if let Some(nch) = chars.next() {
-                            cur.push(nch);
-                            if nch == '"' {
-                                in_quote = false; break;
-                            }
-                        } else {
-                            panic!("Unterminated quote at {}:{}:\n    {}", self.path, i, raw_line)
-                        }
-                    }
-                } else if c.is_whitespace() && !in_quote {
-                    if !cur.is_empty() {
-                        parts.push(cur.clone());
-                        cur.clear();
-                    }
-                } else {
-                    cur.push(c);
-                }
-            }
-
-            if !cur.is_empty() {
-                parts.push(cur);
-            }
-            if parts.is_empty() {
-                continue;
-            }
-
-            let opcode = LVM::opcode_hash(parts[0].to_lowercase().as_str());
-            let args = if parts.len() > 1 {
-                parts[1..].to_vec()
-            } else {
-                vec![]
-            };
-
-            let instr = Instruction {
-                op: opcode,
-                args,
-                raw: raw_line.to_string(),
-                line_idx: i,
-            };
-            instructions.push(instr);
-        }
-
-        self.collect_labels_and_classes(&instructions);
-
-        self.instructions = instructions;
-
-        Ok(())
-    }
-
-    fn collect_labels_and_classes(&mut self, instructions: &Vec<Instruction>) {
-        for (idx, instr) in instructions.iter().enumerate() {
-/* LABEL */ if instr.op == 4137097213 {
-
-                if instr.args.len() != 1 {
-                    panic!("At {}:{}:\n    {}\nlabel expects 1 argument;\nUsage: label <name>", self.path, idx, instr.raw)
-                }
-
-                let mut name = instr.args[0].clone();
-
-                if name.ends_with(':') {
-                    name.pop();
-                }
-
-                if self.labels.contains_key(&name) {
-                    panic!("Label: \"{}\" already defined, at {}:{}:\n    {}", name, self.path, idx, instr.raw)
-                }
-
-                self.labels.insert(name, idx);
-/* STRUCT */ } else if instr.op == 2462236192 {
-
-                if instr.args.len() < 1 {
-                    panic!("At {}:{}:\n    {}\nclass expects as minimum 1 argument;\nUsage: struct <name>: [field1], [field2], ...", self.path, idx, instr.raw)
-                }
-
-                let mut name = instr.args[0].clone();
-                name.pop();
-
-                if self.class_positions.contains_key(&name) {
-                    panic!("Class: \"{}\" already defined, at {}:{}:\n    {}", name, self.path, idx, instr.raw)
-                }
-
-                self.class_positions.insert(name, idx);
-            }
-        }
-    }
-
-    fn load_class_if_needed(&mut self, class_name: String) {
-        let class_hash = LVM::class_hash(&class_name);
-
-        if self.classes.contains_key(&class_hash) {
-            return;
-        }
-
-        let start_idx = match self.class_positions.get(&class_name) {
-            Some(idx) => *idx,
-            None => panic!("Class: {} is not found, at {}:{}", class_name, self.path, self.ip)
-        };
-
-        let mut args = self.instructions[start_idx].args.clone();
-        args.remove(0);
-
-        let info = ClassInfo {
-            class: class_name.clone(),
-            fields: args,
-        };
-
-        self.classes.insert(class_hash, info);
-    }
-
     fn run(&mut self, now: Instant) {
         self.ip = self.labels.get("main")
             .unwrap_or_else(|| panic!("No main label found in {}", self.path))
@@ -522,7 +367,7 @@ impl LVM {
                 }
 
                 let dtype = args[0].as_str();
-                let hash_type = LVM::opcode_hash(dtype);
+                let hash_type = Utils::opcode_hash(dtype);
                 let val = args[1..].join(" ");
 
                 match hash_type {
@@ -946,8 +791,8 @@ impl LVM {
                 let from = args.get(0).map(|s| s.as_str()).unwrap_or("");
                 let to   = args.get(1).map(|s| s.as_str()).unwrap_or("");
 
-                let hashed_from = LVM::opcode_hash(from);
-                let hashed_to = LVM::opcode_hash(to);
+                let hashed_from = Utils::opcode_hash(from);
+                let hashed_to = Utils::opcode_hash(to);
 
                 let casted = match (hashed_from, hashed_to) {
     /* unt - int */ (1255446122, 2515107422)   => val as i64 as u64,
@@ -1066,7 +911,7 @@ impl LVM {
                     }
 
                     let val = self.pop_slot();
-                    let hashed_type = LVM::opcode_hash(&args[0]);
+                    let hashed_type = Utils::opcode_hash(&args[0]);
 
                     match hashed_type {
                 /* unt */1255446122 => println!("{}", val),
@@ -1137,7 +982,7 @@ impl LVM {
                 }
 
                 let required_type = &args[0];
-                let required_type_hash = LVM::opcode_hash(required_type);
+                let required_type_hash = Utils::opcode_hash(required_type);
 
                 let mut input = String::new();
                 io::stdin()
@@ -1219,10 +1064,8 @@ impl LVM {
                 }
 
                 let class_name = args[0].clone();
-                let class_hash = LVM::class_hash(&class_name);
+                let class_hash = Utils::class_hash(&class_name);
                 let init_label = args[1].clone();
-
-                self.load_class_if_needed(class_name.clone());
 
                 let class_info = self.classes.get(&class_hash).unwrap();
                 let field_count = class_info.fields.len();
@@ -1568,24 +1411,6 @@ impl LVM {
     }
 }
 
-fn print_op_hash(op: &str) {
-    if op == "" {
-        return;
-    }
-
-    let hash = LVM::opcode_hash(op);
-    println!("{}: {}", op, hash);
-}
-
-fn print_size_of<T>(class: &str) {
-    if class == "" {
-        return;
-    }
-
-    let size_of = size_of::<T>();
-    println!("Size of {}: {}", class, size_of);
-}
-
 fn main() {
     let mut args = env::args();
     let _prog = args.next();
@@ -1599,12 +1424,15 @@ fn main() {
         Err(e) => panic!("Unable to read file: {};\nError: {}", path, e),
     };
 
-    print_op_hash("");
-    print_size_of::<i32>("");
+    Utils::print_op_hash("");
+    Utils::print_size_of::<HeapEntry>("");
     
     let start = Instant::now();
-    
-    let mut lvm = LVM::new(path);
-    lvm.parse_and_load(&data).unwrap();
+
+    let instructions = Loader::parse(&path, &data);
+    let labels = Loader::collect_labels(&path, &instructions);
+    let classes = Loader::collect_classes(&path, &instructions);
+
+    let mut lvm = LVM::new(path, instructions, labels, classes);
     lvm.run(start);
 }
