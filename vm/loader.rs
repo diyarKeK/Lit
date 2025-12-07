@@ -4,7 +4,7 @@ pub mod Loader {
     use crate::{ClassInfo, Instruction};
     use crate::utils::Utils;
     
-    pub fn parse(path: &str, source: &str) -> Vec<Instruction> {
+    pub fn parse(path: &str, source: String) -> Vec<Instruction> {
         let mut instructions: Vec<Instruction> = vec![];
 
         let mut i = 0;

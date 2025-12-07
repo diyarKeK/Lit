@@ -1076,7 +1076,7 @@ impl LVM {
                     self.write_u64_at(obj_id, i, 0);
                 }
 
-                self.push_u64(obj_id);
+                self.push_ref(obj_id);
                 self.call_stack.push(self.ip);
                 self.frame_stack.push(HashMap::new());
                 self.ip = self.get_label(&init_label) + 1;
@@ -1318,6 +1318,47 @@ impl LVM {
                 self.push_u64(if a >= b { 1 } else { 0 });
             }
 
+/* bit_and */2482333982 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a & b);
+            }
+
+/* bit_or */4122114284 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a | b);
+            }
+
+/* bit_xor */3326371718 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a ^ b);
+            }
+
+/* bit_not */3227631666 => {
+                let a = self.pop_slot();
+                self.push_u64(!a);
+            }
+
+/* bit_shl */2536882014 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a << b);
+            }
+
+/* u_shr */ 836703548 => {
+                let b = self.pop_slot();
+                let a = self.pop_slot();
+                self.push_u64(a >> b);
+            }
+
+/* i_shr */ 362797656 => {
+                let b = self.pop_slot() as i64;
+                let a = self.pop_slot() as i64;
+                self.push_i64(a >> b);
+            }
+
 /* and */   254395046 => {
                 let b = self.pop_slot();
                 let a = self.pop_slot();
@@ -1429,7 +1470,7 @@ fn main() {
     
     let start = Instant::now();
 
-    let instructions = Loader::parse(&path, &data);
+    let instructions = Loader::parse(&path, data);
     let labels = Loader::collect_labels(&path, &instructions);
     let classes = Loader::collect_classes(&path, &instructions);
 
