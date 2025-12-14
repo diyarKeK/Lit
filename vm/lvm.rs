@@ -635,7 +635,7 @@ impl LVM {
                 }
             }
 
-/* str_bytes */3717867548 => {
+/* str_as_bytes */3574304949 => {
                 let s = self.pop_slot();
 
                 let entry = self.heap.get(&s)
@@ -660,6 +660,30 @@ impl LVM {
                     }
 
                     _ => panic!("Expected string for str_bytes, but got {}, at {}:{}:\n    {}", entry.kind.to_string(), self.path, line_idx, raw),
+                }
+            }
+
+/* str_from_bytes */2620326589 => {
+                let arr = self.pop_slot();
+
+                let entry = self.heap.get(&arr)
+                    .unwrap_or_else(|| panic!("Cannot found array ref: {} in heap, at {}:{}:\n    {}", arr, self.path, line_idx, raw));
+
+                match entry.kind {
+                    3 => {
+                        let len = entry.size / 8;
+                        let mut bytes = Vec::new();
+
+                        for i in 0..len {
+                            let byte = self.read_u64_at(arr, i) as u8;
+                            bytes.push(byte);
+                        }
+
+                        let id = self.alloc_str(String::from_utf8(bytes).unwrap().as_str());
+                        self.push_ref(id);
+                    }
+
+                    _ => panic!("Expected array for str_from_bytes, but got {}, at {}:{}:\n    {}", entry.kind, self.path, line_idx, raw),
                 }
             }
 
@@ -795,11 +819,11 @@ impl LVM {
                 let hashed_to = Utils::opcode_hash(to);
 
                 let casted = match (hashed_from, hashed_to) {
-    /* unt - int */ (1255446122, 2515107422)   => val as i64 as u64,
-    /* unt - float */(1255446122, 2797886853) => (val as f64).to_bits(),
+    /* unt - int */ (1255446122, 2515107422)    => val as i64 as u64,
+    /* unt - float */(1255446122, 2797886853)   => (val as f64).to_bits(),
 
-    /* int - unt */ (2515107422, 1255446122)   => val as i64 as u64,
-    /* int - float */(2515107422, 2797886853) => (val as i64 as f64).to_bits(),
+    /* int - unt */ (2515107422, 1255446122)    => val as i64 as u64,
+    /* int - float */(2515107422, 2797886853)   => (val as i64 as f64).to_bits(),
 
     /* float - int */(2797886853, 2515107422)   => (f64::from_bits(val).trunc() as i64) as u64,
     /* float - unt */(2797886853, 1255446122)   => f64::from_bits(val).trunc() as u64,
