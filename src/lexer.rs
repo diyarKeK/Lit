@@ -1,3 +1,4 @@
+use std::fmt;
 use std::process;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -28,6 +29,32 @@ pub enum TokenKind {
     Eof,
 }
 
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TokenKind::Fun => write!(f, "fun"),
+            TokenKind::Unt => write!(f, "unt"),
+            TokenKind::Int => write!(f, "int"),
+            TokenKind::Float => write!(f, "float"),
+            TokenKind::Bool => write!(f, "bool"),
+            TokenKind::Str => write!(f, "str"),
+            TokenKind::Ident(name) => write!(f, "{}", name),
+            TokenKind::StringLit(s) => write!(f, "\"{}\"", s),
+            TokenKind::UntLit(n) => write!(f, "{}", n),
+            TokenKind::FloatLit(n) => write!(f, "{}", n),
+            TokenKind::BoolLit(b) => write!(f, "{}", b),
+            TokenKind::Equal => write!(f, "="),
+            TokenKind::Minus => write!(f, "-"),
+            TokenKind::LParen => write!(f, "("),
+            TokenKind::RParen => write!(f, ")"),
+            TokenKind::LBrace => write!(f, "{{"),
+            TokenKind::RBrace => write!(f, "}}"),
+            TokenKind::Semicolon => write!(f, ";"),
+            TokenKind::Eof => write!(f, "'End_Of_File'"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
@@ -44,21 +71,6 @@ impl Lexer {
             chars: src.chars().collect(),
             pos: 0,
         }
-    }
-
-    pub fn tokenize(&mut self) -> Vec<Token> {
-        let mut tokens = Vec::new();
-
-        loop {
-            let token = self.next_token();
-            let is_eof = token.kind == TokenKind::Eof;
-
-            tokens.push(token);
-
-            if is_eof { break; }
-        }
-
-        tokens
     }
 
     fn peek(&self) -> Option<char> {
@@ -79,6 +91,21 @@ impl Lexer {
         while matches!(self.peek(), Some(c) if c.is_whitespace()) {
             self.scroll();
         }
+    }
+
+    pub fn tokenize(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = self.next_token();
+            let is_eof = token.kind == TokenKind::Eof;
+
+            tokens.push(token);
+
+            if is_eof { break; }
+        }
+
+        tokens
     }
 
     fn next_token(&mut self) -> Token {
