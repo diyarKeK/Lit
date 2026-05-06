@@ -1,3 +1,5 @@
+use std::process;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
     Fun,
@@ -11,7 +13,6 @@ pub enum TokenKind {
     Ident(String),
     StringLit(String),
     UntLit(u64),
-    IntLit(i64),
     FloatLit(f64),
     BoolLit(bool),
 
@@ -64,6 +65,10 @@ impl Lexer {
         self.chars.get(self.pos).copied()
     }
 
+    fn scroll(&mut self) {
+        self.pos += 1;
+    }
+
     fn advance(&mut self) -> Option<char> {
         let c = self.chars.get(self.pos).copied();
         self.pos += 1;
@@ -72,7 +77,7 @@ impl Lexer {
 
     fn skip_whitespace(&mut self) {
         while matches!(self.peek(), Some(c) if c.is_whitespace()) {
-            self.advance();
+            self.scroll();
         }
     }
 
@@ -93,13 +98,31 @@ impl Lexer {
                 let mut s = String::new();
 
                 while let Some(c) = self.peek() {
+                    if c == '\\' {
+                        self.scroll();
+                        let unicode = match self.advance().unwrap() {
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            '"' => '"',
+                            '\\' => '\\',
+                            other => {
+                                eprintln!("Cannot resolve: '\\{}' unicode", other);
+                                process::exit(1);
+                            },
+                        };
+
+                        s.push(unicode);
+                        continue;
+                    }
+
                     if c == q {
-                        self.advance();
+                        self.scroll();
                         break;
                     }
 
                     s.push(c);
-                    self.advance();
+                    self.scroll();
                 }
                 TokenKind::StringLit(s)
             }
@@ -111,11 +134,11 @@ impl Lexer {
                 while let Some(nc) = self.peek() {
                     if nc.is_ascii_digit() {
                         num.push(nc);
-                        self.advance();
+                        self.scroll();
                     } else if nc == '.' && !is_float {
                         is_float = true;
                         num.push(nc);
-                        self.advance();
+                        self.scroll();
                     } else {
                         break;
                     }
@@ -133,7 +156,7 @@ impl Lexer {
                 while let Some(nc) = self.peek() {
                     if nc.is_alphanumeric() || nc == '_' {
                         word.push(nc);
-                        self.advance();
+                        self.scroll();
                     } else {
                         break;
                     }

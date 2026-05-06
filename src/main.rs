@@ -27,6 +27,6 @@ fn main() {
 
     let tokens = Lexer::new(&src).tokenize();
 
-    println!("{:?}", tokens);
+    //tokens.iter().for_each(|token| { println!("{:?}", token.kind) });
     println!("Took: {:?}", now.elapsed());
 }
