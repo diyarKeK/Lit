@@ -8,7 +8,7 @@ use std::{env, fs, process};
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
-use ast::*;
+//use ast::*;
 use lexer::Lexer;
 use parser::Parser;
 use crate::analyzer::analyze;
@@ -73,12 +73,14 @@ fn main() {
 
     let run_status = Command::new(&exe_path)
         .status()
-        .expect(format!("Failed to run: {:?}", exe_path.to_str().unwrap()).as_str());
+        .expect(format!("Failed to run: {:?}", exe_path.to_str().unwrap()).as_str())
+        .code()
+        .unwrap_or(1);
 
     println!("Process finished with code: {}", run_status);
 }
 
-fn print_ast(program: &Program) {
+/*fn print_ast(program: &Program) {
     println!("Program");
     for func in &program.funcs {
         println!("  FuncDef \"{}\"", func.name);
@@ -102,4 +104,4 @@ fn print_ast(program: &Program) {
             }
         }
     }
-}
+}*/

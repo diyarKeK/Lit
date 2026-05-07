@@ -88,8 +88,19 @@ impl Lexer {
     }
 
     fn skip_whitespace(&mut self) {
-        while matches!(self.peek(), Some(c) if c.is_whitespace()) {
-            self.scroll();
+        loop {
+            while matches!(self.peek(), Some(c) if c.is_whitespace()) {
+                self.scroll();
+            }
+
+            if self.peek() == Some('#') {
+                while matches!(self.peek(), Some(c) if c != '\n') {
+                    self.scroll();
+                }
+                continue;
+            }
+
+            break;
         }
     }
 
