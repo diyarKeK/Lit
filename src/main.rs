@@ -9,10 +9,11 @@ use std::{env, fs, process};
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
-//use ast::*;
+use ast::*;
 use lexer::Lexer;
 use parser::Parser;
 use crate::analyzer::analyze;
+use crate::lexer::Token;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -76,7 +77,24 @@ fn main() {
     println!("Process finished with code: {}", run_status);
 }
 
-/*fn print_ast(program: &Program) {
+/*fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
+    let padding = " ".repeat(indent);
+
+    match expr_arena.get(expr_id) {
+        Expr::Unt(u) => println!("{}{},", padding, u),
+        Expr::Float(f) => println!("{}{},", padding, f),
+        Expr::Var(name) => println!("{}${},", padding, name),
+        Expr::Binary { left, op, right } => {
+            println!("{}Binary {{", padding);
+            print_expr(expr_arena, *left, indent + 2);
+            println!("{}    {},", padding, op);
+            print_expr(expr_arena, *right, indent + 2);
+            println!("{}}}", padding);
+        }
+    }
+}
+
+fn print_ast(program: &Program) {
     println!("Program");
     for func in &program.funcs {
         println!("  FuncDef \"{}\"", func.name);

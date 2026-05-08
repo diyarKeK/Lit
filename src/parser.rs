@@ -6,6 +6,7 @@ use crate::generate_error;
 
 pub struct Parser {
     tokens: Vec<Token>,
+    expr_arena: ExprArena,
     pos: usize,
 }
 
@@ -13,6 +14,7 @@ impl Parser {
     pub fn new(tokens: Vec<Token>) -> Parser {
         Parser {
             tokens,
+            expr_arena: ExprArena::new(),
             pos: 0
         }
     }
@@ -180,5 +182,118 @@ impl Parser {
         self.expect(Token::RParen);
 
         arg
+    }
+
+    fn parse_expr(&mut self) -> ExprId {
+        let mut expr_id = self.parse_term();
+
+        loop {
+            match self.peek() {
+                Token::Plus => {
+                    self.scroll();
+                    let right = self.parse_term();
+
+                    expr_id = self.expr_arena.add(Expr::Binary {
+                        left: expr_id,
+                        op: Operand::Plus,
+                        right,
+                    });
+                }
+
+                Token::Minus => {
+                    self.scroll();
+                    let right = self.parse_term();
+
+                    expr_id = self.expr_arena.add(Expr::Binary {
+                        left: expr_id,
+                        op: Operand::Minus,
+                        right,
+                    });
+                }
+
+                _ => break,
+            }
+        }
+
+        expr_id
+    }
+
+    fn parse_term(&mut self) -> ExprId {
+        let mut expr_id = self.parse_factor();
+
+        loop {
+            match self.peek() {
+                Token::Mul => {
+                    self.scroll();
+                    let right = self.parse_factor();
+
+                    expr_id = self.expr_arena.add(Expr::Binary {
+                        left: expr_id,
+                        op: Operand::Mul,
+                        right,
+                    });
+                }
+
+                Token::Div => {
+                    self.scroll();
+                    let right = self.parse_factor();
+
+                    expr_id = self.expr_arena.add(Expr::Binary {
+                        left: expr_id,
+                        op: Operand::Div,
+                        right,
+                    });
+                }
+
+                Token::Rem => {
+                    self.scroll();
+                    let right = self.parse_factor();
+
+                    expr_id = self.expr_arena.add(Expr::Binary {
+                        left: expr_id,
+                        op: Operand::Rem,
+                        right,
+                    });
+                }
+
+                _ => break,
+            }
+        }
+
+        expr_id
+    }
+
+    fn parse_factor(&mut self) -> ExprId {
+        match self.peek().clone() {
+            Token::UntLit(u) => {
+                self.scroll();
+                self.expr_arena.add(Expr::Unt(u))
+            }
+
+            Token::FloatLit(f) => {
+                self.scroll();
+                self.expr_arena.add(Expr::Float(f))
+            }
+
+            Token::Ident(name) => {
+                self.scroll();
+                self.expr_arena.add(Expr::Var(name))
+            }
+
+            Token::LParen => {
+                self.scroll();
+
+                let expr_id = self.parse_expr();
+
+                match self.peek() {
+                    Token::RParen => self.scroll(),
+                    _ => generate_error!("Expected ')' to close left paren in expression"),
+                }
+
+                expr_id
+            },
+
+            other => generate_error!("Invalid expression: {}", other),
+        }
     }
 }

@@ -1,3 +1,35 @@
+use std::fmt::Display;
+
+#[derive(Debug)]
+pub struct Program {
+    pub funcs: Vec<FuncDef>,
+}
+
+#[derive(Debug)]
+pub struct  FuncDef {
+    pub name: String,
+    pub body: Vec<Stmt>,
+}
+
+#[derive(Debug)]
+pub enum Stmt {
+    Println(PrintlnArg),
+    VarDecl(VarDecl),
+}
+
+#[derive(Debug)]
+pub enum PrintlnArg {
+    StringLit(String),
+    Var(String),
+}
+
+#[derive(Debug)]
+pub struct VarDecl {
+    pub _type: Type,
+    pub name: String,
+    pub value: Value,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Unt,
@@ -17,6 +49,14 @@ pub enum Value {
 }
 
 #[derive(Debug, Clone)]
+pub enum Expr {
+    Unt(u64),
+    Float(f64),
+    Var(String),
+    Binary { left: ExprId, op: Operand, right: ExprId },
+}
+
+#[derive(Debug, Clone)]
 pub enum Operand {
     Plus,
     Minus,
@@ -25,39 +65,41 @@ pub enum Operand {
     Rem,
 }
 
-#[derive(Debug, Clone)]
-pub enum Expr {
-    Lit(Value),
-    Var(String),
-    BinOp { left: Box<Expr>, op: Operand, right: Box<Expr> },
+impl Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self { 
+            Operand::Plus => write!(f, "+"),
+            Operand::Minus => write!(f, "-"),
+            Operand::Mul => write!(f, "*"),
+            Operand::Div => write!(f, "/"),
+            Operand::Rem => write!(f, "%"),
+        }
+    }
 }
 
-#[derive(Debug)]
-pub struct VarDecl {
-    pub _type: Type,
-    pub name: String,
-    pub value: Value,
-}
+pub type ExprId = usize;
 
 #[derive(Debug)]
-pub enum PrintlnArg {
-    StringLit(String),
-    Var(String),
+pub struct ExprArena {
+    nodes: Vec<Expr>,
 }
 
-#[derive(Debug)]
-pub enum Stmt {
-    Println(PrintlnArg),
-    VarDecl(VarDecl),
-}
-
-#[derive(Debug)]
-pub struct  FuncDef {
-    pub name: String,
-    pub body: Vec<Stmt>,
-}
-
-#[derive(Debug)]
-pub struct Program {
-    pub funcs: Vec<FuncDef>,
+impl ExprArena {
+    pub fn new() -> ExprArena {
+        ExprArena {
+            nodes: Vec::new(),
+        }
+    }
+    
+    pub fn add(&mut self, expr: Expr) -> ExprId {
+        let id = self.nodes.len();
+        
+        self.nodes.push(expr);
+        
+        id
+    }
+    
+    pub fn get(&self, id: ExprId) -> &Expr {
+        &self.nodes.get(id).unwrap()
+    }
 }
