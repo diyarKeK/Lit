@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::process;
 
 use crate::ast::*;
+use crate::generate_error;
 
 pub fn generate(program: &Program) -> String {
     let mut out = String::new();
@@ -129,10 +130,7 @@ fn emit_println(out: &mut String, arg: &PrintlnArg, fn_name: &str, ctx: &FuncCtx
 
         PrintlnArg::Var(name) => {
             let _type = ctx.var_types.get(name)
-                .unwrap_or_else(|| {
-                    eprintln!("Undefined variable: {}", name);
-                    process::exit(1);
-                });
+                .unwrap_or_else(|| generate_error!("Undefined variable: {}", name));
 
             match _type {
                 Type::Unt | Type::Int | Type::Float => {
@@ -261,10 +259,7 @@ impl FuncCtx {
         for stmt in &func.body {
             if let Stmt::Println(PrintlnArg::Var(name)) = stmt {
                 let _type = var_types.get(name)
-                    .unwrap_or_else(|| {
-                        eprintln!("Undefined variable: '{}'", name);
-                        process::exit(1);
-                    });
+                    .unwrap_or_else(|| generate_error!("Undefined variable: {}", name));
 
                 let fmt = match _type {
                     Type::Unt => Some("%llu\n"),

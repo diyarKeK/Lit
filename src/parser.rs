@@ -1,7 +1,8 @@
 use std::process;
 
 use crate::ast::*;
-use crate::lexer::{Token, TokenKind};
+use crate::lexer::Token;
+use crate::generate_error;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -16,30 +17,29 @@ impl Parser {
         }
     }
 
-    fn peek(&self) -> &TokenKind {
-        &self.tokens.get(self.pos).unwrap().kind
+    fn peek(&self) -> &Token {
+        &self.tokens.get(self.pos).unwrap()
     }
 
     fn scroll(&mut self) {
         self.pos += 1;
     }
 
-    fn advance(&mut self) -> TokenKind {
-        let kind = self.tokens.get(self.pos).unwrap().kind.clone();
+    fn advance(&mut self) -> Token {
+        let kind = self.tokens.get(self.pos).unwrap().clone();
         self.pos += 1;
         kind
     }
 
     fn is_eof(&self) -> bool {
-        self.peek() == &TokenKind::Eof
+        self.peek() == &Token::Eof
     }
 
-    fn expect(&mut self, expected: TokenKind) {
+    fn expect(&mut self, expected: Token) {
         let got = self.advance();
 
         if got != expected {
-            eprintln!("Parse error: expected '{}' but got '{}'", expected, got);
-            process::exit(1);
+            generate_error!("Parse error: expected '{}' but got '{}'", expected, got);
         }
     }
 
@@ -56,135 +56,128 @@ impl Parser {
     }
 
     fn parse_func(&mut self) -> FuncDef {
-        self.expect(TokenKind::Fun);
+        self.expect(Token::Fun);
 
         let name = match self.advance() {
-            TokenKind::Ident(n) => n,
+            Token::Ident(n) => n,
 
             other => {
-                eprintln!("Expected function name after 'fun', but got {:?}", other);
-                process::exit(1);
+                generate_error!("Expected function name after 'fun', but got {:?}", other);
             }
         };
 
-        self.expect(TokenKind::LParen);
-        self.expect(TokenKind::RParen);
-        self.expect(TokenKind::LBrace);
+        self.expect(Token::LParen);
+        self.expect(Token::RParen);
+        self.expect(Token::LBrace);
 
         let mut body = Vec::new();
 
-        while self.peek() != &TokenKind::RBrace && !self.is_eof() {
+        while self.peek() != &Token::RBrace && !self.is_eof() {
             body.push(self.parse_stmt());
         }
 
-        self.expect(TokenKind::RBrace);
+        self.expect(Token::RBrace);
 
         FuncDef { name, body }
     }
 
     fn parse_stmt(&mut self) -> Stmt {
-        match self.peek() {
-            TokenKind::Unt | TokenKind::Int | TokenKind::Float | TokenKind::Bool | TokenKind::Str => {
+        let stmt = match self.peek() {
+            Token::Unt | Token::Int | Token::Float | Token::Bool | Token::Str => {
                 Stmt::VarDecl(self.parse_vardecl())
             }
 
-            TokenKind::Ident(name) if name == "println" => {
+            Token::Ident(name) if name == "println" => {
                 Stmt::Println(self.parse_println())
             },
 
             other => {
-                eprintln!("Parse error: unknown statement starting with `{}`", other);
-                process::exit(1);
+                generate_error!("Parse error: unknown statement starting with `{}`", other);
             }
-        }
+        };
+
+        self.expect(Token::Semicolon);
+
+        stmt
     }
 
     fn parse_vardecl(&mut self) -> VarDecl {
         let _type = match self.advance() {
-            TokenKind::Unt => Type::Unt,
-            TokenKind::Int => Type::Int,
-            TokenKind::Float => Type::Float,
-            TokenKind::Bool => Type::Bool,
-            TokenKind::Str => Type::Str,
+            Token::Unt => Type::Unt,
+            Token::Int => Type::Int,
+            Token::Float => Type::Float,
+            Token::Bool => Type::Bool,
+            Token::Str => Type::Str,
 
             other => {
-                eprintln!("Parse error: unknown type: `{}`", other);
-                process::exit(1);
+                generate_error!("Parse error: unknown type: `{}`", other);
             }
         };
 
         let name = match self.advance() {
-            TokenKind::Ident(name) => name,
+            Token::Ident(name) => name,
             other => {
-                eprintln!("Expected variable name after type, but got `{}`", other);
-                process::exit(1);
+                generate_error!("Expected variable name after type, but got `{}`", other);
             }
         };
 
-        self.expect(TokenKind::Equal);
+        self.expect(Token::Equal);
 
         let value = self.parse_value(&_type);
-
-        self.expect(TokenKind::Semicolon);
 
         VarDecl { _type, name, value }
     }
 
     fn parse_value(&mut self, _type: &Type) -> Value {
         match (_type, self.advance()) {
-            (Type::Unt, TokenKind::UntLit(n)) => Value::Unt(n),
+            (Type::Unt, Token::UntLit(n)) => Value::Unt(n),
 
-            (Type::Int, TokenKind::UntLit(n)) => Value::Int(n as i64),
-            (Type::Int, TokenKind::Minus) => {
+            (Type::Int, Token::UntLit(n)) => Value::Int(n as i64),
+            (Type::Int, Token::Minus) => {
                 match self.advance() {
-                    TokenKind::UntLit(n) => Value::Int(-(n as i64)),
+                    Token::UntLit(n) => Value::Int(-(n as i64)),
                     other => {
-                        eprintln!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type);
-                        process::exit(1);
+                        generate_error!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type);
                     }
                 }
             }
 
-            (Type::Float, TokenKind::FloatLit(n)) => Value::Float(n),
-            (Type::Float, TokenKind::UntLit(n)) => Value::Float(n as f64),
-            (Type::Float, TokenKind::Minus) => {
+            (Type::Float, Token::FloatLit(n)) => Value::Float(n),
+            (Type::Float, Token::UntLit(n)) => Value::Float(n as f64),
+            (Type::Float, Token::Minus) => {
                 match self.advance() {
-                    TokenKind::FloatLit(n) => Value::Float(-n),
-                    TokenKind::UntLit(n) => Value::Float(-(n as f64)),
+                    Token::FloatLit(n) => Value::Float(-n),
+                    Token::UntLit(n) => Value::Float(-(n as f64)),
                     other => {
-                        eprintln!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type);
-                        process::exit(1);
+                        generate_error!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type);
                     }
                 }
             }
 
-            (Type::Bool, TokenKind::BoolLit(b)) => Value::Bool(b),
+            (Type::Bool, Token::BoolLit(b)) => Value::Bool(b),
 
-            (Type::Str, TokenKind::StringLit(s)) => Value::Str(s),
+            (Type::Str, Token::StringLit(s)) => Value::Str(s),
 
             (_type, other) => {
-                eprintln!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type);
-                process::exit(1);
+                generate_error!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type)
             }
         }
     }
 
     fn parse_println(&mut self) -> PrintlnArg {
         self.scroll();
-        self.expect(TokenKind::LParen);
+        self.expect(Token::LParen);
 
         let arg = match self.advance() {
-            TokenKind::StringLit(s) => PrintlnArg::StringLit(s),
-            TokenKind::Ident(var) => PrintlnArg::Var(var),
+            Token::StringLit(s) => PrintlnArg::StringLit(s),
+            Token::Ident(var) => PrintlnArg::Var(var),
 
             other => {
-                eprintln!("Expected literal string or variable for println(), but got {:?}", other);
-                process::exit(1);
+                generate_error!("Expected literal string or variable as an argument for println(), but got {:?}", other);
             }
         };
 
-        self.expect(TokenKind::RParen);
-        self.expect(TokenKind::Semicolon);
+        self.expect(Token::RParen);
 
         arg
     }

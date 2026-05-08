@@ -3,6 +3,7 @@ mod ast;
 mod parser;
 mod codegen;
 mod analyzer;
+mod utils;
 
 use std::{env, fs, process};
 use std::path::Path;
@@ -16,26 +17,23 @@ use crate::analyzer::analyze;
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Not enough arguments supplied.\nUsage: litc file.lit");
-        process::exit(1);
+        generate_error!("Not enough arguments supplied.\nUsage: litc file.lit");
     }
 
     let input_path = Path::new(&args[1]);
     if input_path.extension().and_then(|e| e.to_str()) != Some("lit") {
-        eprintln!("Error: file does not have .lit extension");
-        process::exit(1);
+        generate_error!("Error: file does not have .lit extension");
     }
 
     let src = fs::read_to_string(input_path).unwrap_or_else(|e| {
-        eprintln!("Cannot read {:?}: {}", input_path, e);
-        process::exit(1);
+        generate_error!("Cannot read {:?}: {}", input_path, e);
     });
 
     let now = Instant::now();
 
     let tokens = Lexer::new(&src).tokenize();
     //println!("[Tokens]");
-    //tokens.iter().for_each(|token| { println!("{:?}", token.kind) });
+    //tokens.iter().for_each(|token| { println!("{}", token) });
 
     let program = Parser::new(tokens).parse();
     //println!("[AST]");
@@ -50,8 +48,7 @@ fn main() {
 
     let ir_path = input_path.with_extension("ll");
     fs::write(&ir_path, &ir).unwrap_or_else(|e| {
-        eprintln!("Cannot write {:?}: {}", ir_path, e);
-        process::exit(1);
+        generate_error!("Cannot write {:?}: {}", ir_path, e);
     });
 
     let exe_path = input_path.with_extension("exe");
@@ -67,8 +64,7 @@ fn main() {
         .expect("Failed to run clang");
 
     if !clang_status.success() {
-        eprintln!("Clang compilation failed");
-        process::exit(1);
+        generate_error!("Clang compilation failed");
     }
 
     let run_status = Command::new(&exe_path)

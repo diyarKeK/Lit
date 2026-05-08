@@ -16,6 +16,22 @@ pub enum Value {
     Str(String),
 }
 
+#[derive(Debug, Clone)]
+pub enum Operand {
+    Plus,
+    Minus,
+    Mul,
+    Div,
+    Rem,
+}
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+    Lit(Value),
+    Var(String),
+    BinOp { left: Box<Expr>, op: Operand, right: Box<Expr> },
+}
+
 #[derive(Debug)]
 pub struct VarDecl {
     pub _type: Type,

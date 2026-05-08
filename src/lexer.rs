@@ -1,8 +1,9 @@
 use std::fmt;
 use std::process;
+use crate::generate_error;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum TokenKind {
+pub enum Token {
     Fun,
 
     Unt,
@@ -18,7 +19,11 @@ pub enum TokenKind {
     BoolLit(bool),
 
     Equal,
+    Plus,
     Minus,
+    Mul,
+    Div,
+    Rem,
 
     LParen,
     RParen,
@@ -29,36 +34,36 @@ pub enum TokenKind {
     Eof,
 }
 
-impl fmt::Display for TokenKind {
+impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TokenKind::Fun => write!(f, "fun"),
-            TokenKind::Unt => write!(f, "unt"),
-            TokenKind::Int => write!(f, "int"),
-            TokenKind::Float => write!(f, "float"),
-            TokenKind::Bool => write!(f, "bool"),
-            TokenKind::Str => write!(f, "str"),
-            TokenKind::Ident(name) => write!(f, "{}", name),
-            TokenKind::StringLit(s) => write!(f, "\"{}\"", s),
-            TokenKind::UntLit(n) => write!(f, "{}", n),
-            TokenKind::FloatLit(n) => write!(f, "{}", n),
-            TokenKind::BoolLit(b) => write!(f, "{}", b),
-            TokenKind::Equal => write!(f, "="),
-            TokenKind::Minus => write!(f, "-"),
-            TokenKind::LParen => write!(f, "("),
-            TokenKind::RParen => write!(f, ")"),
-            TokenKind::LBrace => write!(f, "{{"),
-            TokenKind::RBrace => write!(f, "}}"),
-            TokenKind::Semicolon => write!(f, ";"),
-            TokenKind::Eof => write!(f, "'End_Of_File'"),
+            Token::Fun => write!(f, "fun"),
+            Token::Unt => write!(f, "unt"),
+            Token::Int => write!(f, "int"),
+            Token::Float => write!(f, "float"),
+            Token::Bool => write!(f, "bool"),
+            Token::Str => write!(f, "str"),
+            Token::Ident(name) => write!(f, "{}", name),
+            Token::StringLit(s) => write!(f, "\"{}\"", s),
+            Token::UntLit(n) => write!(f, "{}", n),
+            Token::FloatLit(n) => write!(f, "{}", n),
+            Token::BoolLit(b) => write!(f, "{}", b),
+            Token::Equal => write!(f, "="),
+            Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Mul => write!(f, "*"),
+            Token::Div => write!(f, "/"),
+            Token::Rem => write!(f, "%"),
+            Token::LParen => write!(f, "("),
+            Token::RParen => write!(f, ")"),
+            Token::LBrace => write!(f, "{{"),
+            Token::RBrace => write!(f, "}}"),
+            Token::Semicolon => write!(f, ";"),
+            Token::Eof => write!(f, "'End_Of_File'"),
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Token {
-    pub kind: TokenKind,
-}
 
 pub struct Lexer {
     chars: Vec<char>,
@@ -109,7 +114,7 @@ impl Lexer {
 
         loop {
             let token = self.next_token();
-            let is_eof = token.kind == TokenKind::Eof;
+            let is_eof = token == Token::Eof;
 
             tokens.push(token);
 
@@ -123,14 +128,18 @@ impl Lexer {
         self.skip_whitespace();
 
         let kind = match self.advance() {
-            None => TokenKind::Eof,
-            Some('(') => TokenKind::LParen,
-            Some(')') => TokenKind::RParen,
-            Some('{') => TokenKind::LBrace,
-            Some('}') => TokenKind::RBrace,
-            Some(';') => TokenKind::Semicolon,
-            Some('=') => TokenKind::Equal,
-            Some('-') => TokenKind::Minus,
+            None => Token::Eof,
+            Some('(') => Token::LParen,
+            Some(')') => Token::RParen,
+            Some('{') => Token::LBrace,
+            Some('}') => Token::RBrace,
+            Some(';') => Token::Semicolon,
+            Some('=') => Token::Equal,
+            Some('+') => Token::Plus,
+            Some('-') => Token::Minus,
+            Some('*') => Token::Mul,
+            Some('/') => Token::Div,
+            Some('%') => Token::Rem,
 
             Some(q @ '"') => {
                 let mut s = String::new();
@@ -145,8 +154,7 @@ impl Lexer {
                             '"' => '"',
                             '\\' => '\\',
                             other => {
-                                eprintln!("Cannot resolve: '\\{}' unicode", other);
-                                process::exit(1);
+                                generate_error!("Cannot resolve: '\\{}' unicode", other);
                             },
                         };
 
@@ -162,7 +170,7 @@ impl Lexer {
                     s.push(c);
                     self.scroll();
                 }
-                TokenKind::StringLit(s)
+                Token::StringLit(s)
             }
 
             Some(c) if c.is_ascii_digit() => {
@@ -183,9 +191,9 @@ impl Lexer {
                 }
 
                 if is_float {
-                    TokenKind::FloatLit(num.parse().unwrap())
+                    Token::FloatLit(num.parse().unwrap())
                 } else {
-                    TokenKind::UntLit(num.parse().unwrap())
+                    Token::UntLit(num.parse().unwrap())
                 }
             }
 
@@ -201,22 +209,22 @@ impl Lexer {
                 }
 
                 match word.as_str() {
-                    "fun" => TokenKind::Fun,
-                    "unt" => TokenKind::Unt,
-                    "int" => TokenKind::Int,
-                    "float" => TokenKind::Float,
-                    "bool" => TokenKind::Bool,
-                    "str" => TokenKind::Str,
-                    "true" => TokenKind::BoolLit(true),
-                    "false" => TokenKind::BoolLit(false),
+                    "fun" => Token::Fun,
+                    "unt" => Token::Unt,
+                    "int" => Token::Int,
+                    "float" => Token::Float,
+                    "bool" => Token::Bool,
+                    "str" => Token::Str,
+                    "true" => Token::BoolLit(true),
+                    "false" => Token::BoolLit(false),
 
-                    _ => TokenKind::Ident(word),
+                    _ => Token::Ident(word),
                 }
             }
 
-            Some(other) => panic!("Unrecognized character: {}", other),
+            Some(other) => generate_error!("Unrecognized character: {}", other),
         };
 
-        Token { kind }
+        kind
     }
 }
