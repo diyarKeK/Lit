@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+/*use std::collections::HashMap;
 use std::process;
 
 use crate::ast::*;
@@ -295,5 +295,5 @@ impl EmitState {
         self.reg += 1;
         r
     }
-}
+}*/
 

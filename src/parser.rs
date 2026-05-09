@@ -15,12 +15,12 @@ impl Parser {
         Parser {
             tokens,
             expr_arena: ExprArena::new(),
-            pos: 0
+            pos: 0,
         }
     }
 
     fn peek(&self) -> &Token {
-        &self.tokens.get(self.pos).unwrap()
+        self.tokens.get(self.pos).unwrap()
     }
 
     fn scroll(&mut self) {
@@ -28,9 +28,9 @@ impl Parser {
     }
 
     fn advance(&mut self) -> Token {
-        let kind = self.tokens.get(self.pos).unwrap().clone();
+        let token = self.tokens.get(self.pos).unwrap().clone();
         self.pos += 1;
-        kind
+        token
     }
 
     fn is_eof(&self) -> bool {
@@ -45,7 +45,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Program {
+    pub fn parse(mut self) -> Program {
         let mut funcs = Vec::new();
 
         while !self.is_eof() {
@@ -54,6 +54,7 @@ impl Parser {
 
         Program {
             funcs,
+            expr_arena: self.expr_arena,
         }
     }
 
@@ -63,9 +64,7 @@ impl Parser {
         let name = match self.advance() {
             Token::Ident(n) => n,
 
-            other => {
-                generate_error!("Expected function name after 'fun', but got {:?}", other);
-            }
+            other => generate_error!("Expected function name after 'fun', but got {:?}", other),
         };
 
         self.expect(Token::LParen);
@@ -93,14 +92,23 @@ impl Parser {
                 Stmt::Println(self.parse_println())
             },
 
-            other => {
-                generate_error!("Parse error: unknown statement starting with `{}`", other);
-            }
+            other => generate_error!("Parse error: unknown statement starting with `{}`", other),
         };
 
         self.expect(Token::Semicolon);
 
         stmt
+    }
+
+    fn parse_println(&mut self) -> ExprId {
+        self.scroll();
+        self.expect(Token::LParen);
+
+        let arg = self.parse_expr();
+
+        self.expect(Token::RParen);
+
+        arg
     }
 
     fn parse_vardecl(&mut self) -> VarDecl {
@@ -111,81 +119,25 @@ impl Parser {
             Token::Bool => Type::Bool,
             Token::Str => Type::Str,
 
-            other => {
-                generate_error!("Parse error: unknown type: `{}`", other);
-            }
+            other => generate_error!("Unknown type: `{}`", other),
         };
 
         let name = match self.advance() {
             Token::Ident(name) => name,
-            other => {
-                generate_error!("Expected variable name after type, but got `{}`", other);
-            }
+
+            other => generate_error!("Expected variable name after type, but got `{}`", other),
         };
 
         self.expect(Token::Equal);
 
-        let value = self.parse_value(&_type);
+        let value = self.parse_expr();
 
         VarDecl { _type, name, value }
     }
 
-    fn parse_value(&mut self, _type: &Type) -> Value {
-        match (_type, self.advance()) {
-            (Type::Unt, Token::UntLit(n)) => Value::Unt(n),
-
-            (Type::Int, Token::UntLit(n)) => Value::Int(n as i64),
-            (Type::Int, Token::Minus) => {
-                match self.advance() {
-                    Token::UntLit(n) => Value::Int(-(n as i64)),
-                    other => {
-                        generate_error!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type);
-                    }
-                }
-            }
-
-            (Type::Float, Token::FloatLit(n)) => Value::Float(n),
-            (Type::Float, Token::UntLit(n)) => Value::Float(n as f64),
-            (Type::Float, Token::Minus) => {
-                match self.advance() {
-                    Token::FloatLit(n) => Value::Float(-n),
-                    Token::UntLit(n) => Value::Float(-(n as f64)),
-                    other => {
-                        generate_error!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type);
-                    }
-                }
-            }
-
-            (Type::Bool, Token::BoolLit(b)) => Value::Bool(b),
-
-            (Type::Str, Token::StringLit(s)) => Value::Str(s),
-
-            (_type, other) => {
-                generate_error!("Incorrect value: value '{}' does not match to type '{:?}'", other, _type)
-            }
-        }
-    }
-
-    fn parse_println(&mut self) -> PrintlnArg {
-        self.scroll();
-        self.expect(Token::LParen);
-
-        let arg = match self.advance() {
-            Token::StringLit(s) => PrintlnArg::StringLit(s),
-            Token::Ident(var) => PrintlnArg::Var(var),
-
-            other => {
-                generate_error!("Expected literal string or variable as an argument for println(), but got {:?}", other);
-            }
-        };
-
-        self.expect(Token::RParen);
-
-        arg
-    }
 
     fn parse_expr(&mut self) -> ExprId {
-        let mut expr_id = self.parse_term();
+        let mut expr = self.parse_term();
 
         loop {
             match self.peek() {
@@ -193,8 +145,8 @@ impl Parser {
                     self.scroll();
                     let right = self.parse_term();
 
-                    expr_id = self.expr_arena.add(Expr::Binary {
-                        left: expr_id,
+                    expr = self.expr_arena.add(Expr::Binary {
+                        left: expr,
                         op: Operand::Plus,
                         right,
                     });
@@ -204,8 +156,8 @@ impl Parser {
                     self.scroll();
                     let right = self.parse_term();
 
-                    expr_id = self.expr_arena.add(Expr::Binary {
-                        left: expr_id,
+                    expr = self.expr_arena.add(Expr::Binary {
+                        left: expr,
                         op: Operand::Minus,
                         right,
                     });
@@ -215,11 +167,11 @@ impl Parser {
             }
         }
 
-        expr_id
+        expr
     }
 
     fn parse_term(&mut self) -> ExprId {
-        let mut expr_id = self.parse_factor();
+        let mut expr = self.parse_factor();
 
         loop {
             match self.peek() {
@@ -227,8 +179,8 @@ impl Parser {
                     self.scroll();
                     let right = self.parse_factor();
 
-                    expr_id = self.expr_arena.add(Expr::Binary {
-                        left: expr_id,
+                    expr = self.expr_arena.add(Expr::Binary {
+                        left: expr,
                         op: Operand::Mul,
                         right,
                     });
@@ -238,8 +190,8 @@ impl Parser {
                     self.scroll();
                     let right = self.parse_factor();
 
-                    expr_id = self.expr_arena.add(Expr::Binary {
-                        left: expr_id,
+                    expr = self.expr_arena.add(Expr::Binary {
+                        left: expr,
                         op: Operand::Div,
                         right,
                     });
@@ -249,8 +201,8 @@ impl Parser {
                     self.scroll();
                     let right = self.parse_factor();
 
-                    expr_id = self.expr_arena.add(Expr::Binary {
-                        left: expr_id,
+                    expr = self.expr_arena.add(Expr::Binary {
+                        left: expr,
                         op: Operand::Rem,
                         right,
                     });
@@ -260,34 +212,35 @@ impl Parser {
             }
         }
 
-        expr_id
+        expr
     }
 
     fn parse_factor(&mut self) -> ExprId {
-        match self.peek().clone() {
-            Token::UntLit(u) => {
-                self.scroll();
-                self.expr_arena.add(Expr::Unt(u))
-            }
+        match self.advance() {
+            Token::UntLit(u) => self.expr_arena.add(Expr::Unt(u)),
 
-            Token::FloatLit(f) => {
-                self.scroll();
-                self.expr_arena.add(Expr::Float(f))
-            }
+            Token::FloatLit(f) => self.expr_arena.add(Expr::Float(f)),
 
-            Token::Ident(name) => {
-                self.scroll();
-                self.expr_arena.add(Expr::Var(name))
+            Token::BoolLit(b) => self.expr_arena.add(Expr::Bool(b)),
+
+            Token::StringLit(s) => self.expr_arena.add(Expr::Str(s)),
+
+            Token::Ident(name) => self.expr_arena.add(Expr::Var(name)),
+
+            Token::Minus => {
+                match self.advance() {
+                    Token::UntLit(n) => self.expr_arena.add(Expr::Int(-(n as i64))),
+                    Token::FloatLit(f) => self.expr_arena.add(Expr::Float(-f)),
+
+                    other => generate_error!("Expected number after '-', got: `{}`", other),
+                }
             }
 
             Token::LParen => {
-                self.scroll();
-
                 let expr_id = self.parse_expr();
 
-                match self.peek() {
-                    Token::RParen => self.scroll(),
-                    _ => generate_error!("Expected ')' to close left paren in expression"),
+                if self.advance() != Token::RParen {
+                    generate_error!("Expected ')' to close left paren in expression")
                 }
 
                 expr_id

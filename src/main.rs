@@ -5,15 +5,16 @@ mod codegen;
 mod analyzer;
 mod utils;
 
-use std::{env, fs, process};
-use std::path::Path;
-use std::process::Command;
-use std::time::Instant;
-use ast::*;
 use lexer::Lexer;
 use parser::Parser;
 use crate::analyzer::analyze;
-use crate::lexer::Token;
+use ast::*;
+
+use std::env;
+use std::fs;
+use std::process;
+use std::path::Path;
+use std::time::Instant;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -37,17 +38,17 @@ fn main() {
     //tokens.iter().for_each(|token| { println!("{}", token) });
 
     let program = Parser::new(tokens).parse();
-    //println!("[AST]");
-    //print_ast(&program);
+    println!("[AST]");
+    print_ast(&program);
     
     analyze(&program);
 
-    let ir = codegen::generate(&program);
+    //let ir = codegen::generate(&program);
     //println!("[IR]\n{}", ir);
 
     println!("Took: {:?}", now.elapsed());
 
-    let ir_path = input_path.with_extension("ll");
+    /*let ir_path = input_path.with_extension("ll");
     fs::write(&ir_path, &ir).unwrap_or_else(|e| {
         generate_error!("Cannot write {:?}: {}", ir_path, e);
     });
@@ -74,20 +75,23 @@ fn main() {
         .code()
         .unwrap_or(1);
 
-    println!("Process finished with code: {}", run_status);
+    println!("Process finished with code: {}", run_status);*/
 }
 
-/*fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
+fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
     let padding = " ".repeat(indent);
 
     match expr_arena.get(expr_id) {
-        Expr::Unt(u) => println!("{}{},", padding, u),
-        Expr::Float(f) => println!("{}{},", padding, f),
+        Expr::Unt(u) => println!("{}Unt({}),", padding, u),
+        Expr::Int(i) => println!("{}Int({}),", padding, i),
+        Expr::Float(f) => println!("{}Float({}),", padding, f),
+        Expr::Bool(b) => println!("{}Bool({}),", padding, b),
+        Expr::Str(s) => println!("{}Str(\"{}\"),", padding, s),
         Expr::Var(name) => println!("{}${},", padding, name),
         Expr::Binary { left, op, right } => {
             println!("{}Binary {{", padding);
             print_expr(expr_arena, *left, indent + 2);
-            println!("{}    {},", padding, op);
+            println!("{}  {},", padding, op);
             print_expr(expr_arena, *right, indent + 2);
             println!("{}}}", padding);
         }
@@ -95,27 +99,21 @@ fn main() {
 }
 
 fn print_ast(program: &Program) {
-    println!("Program");
+    println!("Program:");
     for func in &program.funcs {
-        println!("  FuncDef \"{}\"", func.name);
+        println!("  FuncDef: \"{}\"", func.name);
         for stmt in &func.body {
             match stmt {
                 Stmt::VarDecl(v) => {
                     let ty = format!("{:?}", v._type).to_lowercase();
-                    let val = match &v.value {
-                        Value::Unt(n) => format!("{}", n),
-                        Value::Int(n) => format!("{}", n),
-                        Value::Float(f) => format!("{}", f),
-                        Value::Bool(b) => format!("{}", b),
-                        Value::Str(s) => format!("\"{}\"", s),
-                    };
-                    println!("    VarDecl  {} {} = {}", ty, v.name, val);
+                    print!("    VarDecl:  {} {} = ", ty, v.name);
+                    print_expr(&program.expr_arena, v.value, 0);
                 }
-                Stmt::Println(arg) => match arg {
-                    PrintlnArg::StringLit(s) => println!("    Println  \"{}\"", s),
-                    PrintlnArg::Var(name)  => println!("    Println  {}", name),
-                },
+                Stmt::Println(arg) => {
+                    print!("    Println:  ");
+                    print_expr(&program.expr_arena, *arg, 0);
+                }
             }
         }
     }
-}*/
+}
