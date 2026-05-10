@@ -1,0 +1,21 @@
+interface Formatter {
+    fun fmt(): str;
+}
+
+class StrBuilder {
+    Vec<> chars;
+
+    StrBuilder() {
+        
+    }
+
+    fun to_str(): str {
+
+    }
+}
+
+module StrBuilder {
+    fun new(): StrBuilder {
+        return StrBuilder();
+    }
+}

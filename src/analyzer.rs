@@ -72,7 +72,7 @@ fn infer_type(
             let resolved = resolve_binary_type(&left, &right);
 
             resolved.unwrap_or_else(|| {
-                generate_error!("Cannot apply operator '{}' for '{}' and '{}'", op, left.get_type(), right.get_type());
+                generate_error!("Cannot apply operator '{}' for types: '{}' and '{}'", op, left.get_type(), right.get_type());
             })
         }
     }
@@ -81,7 +81,7 @@ fn infer_type(
 fn resolve_binary_type(left: &TypeSource, right: &TypeSource) -> Option<TypeSource> {
     match (left, right) {
         (TS::Var(a), TS::Var(b)) => {
-            if a == b {
+            if a == b && is_num_type(a) && is_num_type(b) {
                 Some(TS::Var(a.clone()))
             } else {
                 None
@@ -104,6 +104,10 @@ fn resolve_binary_type(left: &TypeSource, right: &TypeSource) -> Option<TypeSour
     }
 }
 
+fn is_num_type(a: &Type) -> bool {
+    !matches!(a, Type::Bool | Type::Str)
+}
+
 fn does_literal_num_fits_in(lit: &Type, var: &Type) -> bool {
     matches!(
         (var, lit),
@@ -118,13 +122,15 @@ fn does_literal_num_fits_in(lit: &Type, var: &Type) -> bool {
 
 fn numeric_tower(a: &Type, b: &Type) -> Option<Type> {
     match (a, b) {
-        (a, b) if a == b => Some(a.clone()),
+        (Type::Unt, Type::Unt) => Some(Type::Unt),
 
-        (Type::Int, Type::Unt) | (Type::Unt, Type::Int)
+        (Type::Int, Type::Unt) | (Type::Unt, Type::Int) |
+        (Type::Int, Type::Int)
             => Some(Type::Int),
 
         (Type::Unt, Type::Float) | (Type::Float, Type::Unt) |
-        (Type::Int, Type::Float) | (Type::Float, Type::Int)
+        (Type::Int, Type::Float) | (Type::Float, Type::Int) |
+        (Type::Float, Type::Float)
             => Some(Type::Float),
 
         _ => None,

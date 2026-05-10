@@ -1,8 +1,6 @@
-/*use std::collections::HashMap;
-use std::process;
+use std::collections::HashMap;
 
 use crate::ast::*;
-use crate::generate_error;
 
 pub fn generate(program: &Program) -> String {
     let mut out = String::new();
@@ -15,14 +13,14 @@ pub fn generate(program: &Program) -> String {
     out.push_str("@bool.false = private unnamed_addr constant [6 x i8] c\"false\\00\"\n\n");
 
     for func in &program.funcs {
-        emit_func(&mut out, &func);
+        emit_func(&mut out, func, &program.expr_arena);
     }
 
     out
 }
 
-fn emit_func(out: &mut String, func: &FuncDef) {
-    let ctx = FuncCtx::build(func);
+fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
+    let ctx = FuncCtx::build(func, expr_arena);
 
     for (i, s) in ctx.str_consts.iter().enumerate() {
         let b = s.len() + 1;
@@ -48,8 +46,8 @@ fn emit_func(out: &mut String, func: &FuncDef) {
 
     for stmt in &func.body {
         match stmt {
-            Stmt::VarDecl(v) => emit_vardecl(out, v, &func.name, &mut state),
-            Stmt::Println(arg) => emit_println(out, arg, &func.name, &ctx, &mut state),
+            Stmt::VarDecl(v) => emit_vardecl(out, v, expr_arena, &func.name, &ctx, &mut state),
+            Stmt::Println(arg) => emit_println(out, expr_arena, *arg, &func.name, &ctx, &mut state),
         }
     }
 
@@ -57,163 +55,156 @@ fn emit_func(out: &mut String, func: &FuncDef) {
     out.push_str("}\n\n");
 }
 
-fn emit_vardecl(out: &mut String, v: &VarDecl, fn_name: &str, state: &mut EmitState) {
-    match &v.value {
-        Value::Unt(u) => {
-            out.push_str(&format!("  %{name} = alloca i64\n", name = v.name));
+fn emit_vardecl(
+    out: &mut String,
+    v: &VarDecl,
+    arena: &ExprArena,
+    fn_name: &str,
+    ctx: &FuncCtx,
+    state: &mut EmitState,
+) {
+    let llvm_type = infer_llvm_type(arena, v.value, &ctx.var_types);
+    let alloca_type = llvm_type.get_alloca_type();
+
+    out.push_str(&format!("  %{name} = alloca {_type}\n", name = v.name, _type = alloca_type));
+
+    let val = emit_expr(out, arena, v.value, fn_name, ctx, state).0;
+
+    out.push_str(&format!(
+        "  store {_type} {val}, {_type}* %{name}\n",
+        _type = alloca_type, val = val, name = v.name,
+    ));
+}
+
+fn emit_println(
+    out: &mut String,
+    arena: &ExprArena,
+    expr_id: ExprId,
+    fn_name: &str,
+    ctx: &FuncCtx,
+    state: &mut EmitState
+) {
+    let _type = infer_llvm_type(arena, expr_id, &ctx.var_types);
+    let val = emit_expr(out, arena, expr_id, fn_name, ctx, state).0;
+
+    match _type {
+        LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::Double => {
+            let fi = state.fmt_idx;
+            state.fmt_idx += 1;
+            let fmt = &ctx.num_fmts[fi];
+            let fb = fmt.len() + 1;
+            let rf = state.next_reg();
+            let llvm_type = _type.get_alloca_type();
+
             out.push_str(&format!(
-                "  store i64 {u}, i64* %{name}\n",
-                u = *u as i64, name = v.name,
+                "  %r{rf} = getelementptr inbounds [{fb} x i8], [{fb} x i8]* @fmt.{fn_name}.{fi}, i32 0, i32 0\n",
+                rf = rf, fb = fb, fn_name = fn_name, fi = fi,
+            ));
+            out.push_str(&format!(
+                "  call i32 (i8*, ...) @printf(i8* %r{rf}, {_type} {val})\n",
+                rf = rf, _type = llvm_type, val = val
             ));
         }
 
-        Value::Int(i) => {
-            out.push_str(&format!("  %{name} = alloca i64\n", name = v.name));
+        LlvmType::I1 => {
+            let rt = state.next_reg();
+            let rf = state.next_reg();
+            let rs = state.next_reg();
+
             out.push_str(&format!(
-                "  store i64 {i}, i64* %{name}\n",
-                i = i, name = v.name,
+                "  %r{rt} = getelementptr inbounds [5 x i8], [5 x i8]* @bool.true, i32 0, i32 0\n",
+                rt = rt,
             ));
+            out.push_str(&format!(
+                "  %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @bool.false, i32 0, i32 0\n",
+                rf = rf,
+            ));
+            out.push_str(&format!(
+                "  %r{rs} = select i1 {val}, i8* %r{rt}, i8* %r{rf}\n",
+                rs = rs, val = val, rt = rt, rf = rf,
+            ));
+            out.push_str(&format!("  call i32 @puts(i8* %r{rs})\n", rs = rs));
         }
 
-        Value::Float(f) => {
-            out.push_str(&format!("  %{name} = alloca double\n", name = v.name));
-            out.push_str(&format!(
-                "  store double {f:.6e}, double* %{name}\n",
-                f = f, name = v.name,
-            ));
-        }
-
-        Value::Bool(b) => {
-            let val = if *b { 1 } else { 0 };
-            out.push_str(&format!("  %{name} = alloca i1\n", name = v.name));
-            out.push_str(&format!(
-                "  store i1 {val}, i1* %{name}\n",
-                val = val, name = v.name,
-            ));
-        }
-
-        Value::Str(s) => {
-            let b = s.len() + 1;
-            let si = state.str_idx;
-            state.str_idx += 1;
-            let tmp = state.next_reg();
-
-            out.push_str(&format!("  %{name} = alloca i8*\n", name = v.name));
-            out.push_str(&format!(
-                "  %r{tmp} = getelementptr inbounds [{b} x i8], [{b} x i8]* @str.{fn_name}.{si}, i32 0, i32 0\n",
-                tmp = tmp, b = b, fn_name = fn_name, si = si,
-            ));
-            out.push_str(&format!(
-                "  store i8* %r{tmp}, i8** %{name}\n",
-                tmp = tmp, name = v.name,
-            ));
+        LlvmType::I8Ptr => {
+            out.push_str(&format!("  call i32 @puts(i8* {val})\n", val = val));
         }
     }
 }
 
-fn emit_println(out: &mut String, arg: &PrintlnArg, fn_name: &str, ctx: &FuncCtx, state: &mut EmitState) {
-    match arg {
-        PrintlnArg::StringLit(s) => {
+fn emit_expr(
+    out: &mut String,
+    arena: &ExprArena,
+    id: ExprId,
+    fn_name: &str,
+    ctx: &FuncCtx,
+    state: &mut EmitState
+) -> (String, LlvmType) {
+    match arena.get(id) {
+        Expr::Unt(u) => (format!("{}", *u as i64), LlvmType::I64Unsigned),
+        Expr::Int(i) => (format!("{}", i), LlvmType::I64Signed),
+        Expr::Float(f) => (format!("{:.6e}", f), LlvmType::Double),
+        Expr::Bool(b) => (format!("{}", *b as i32), LlvmType::I1),
+        Expr::Str(s) => {
             let b = s.len() + 1;
             let si = state.str_idx;
             state.str_idx += 1;
-            let ptr = state.next_reg();
+            let reg = state.next_reg();
 
             out.push_str(&format!(
-                "  %r{ptr} = getelementptr inbounds [{b} x i8], [{b} x i8]* @str.{fn_name}.{si}, i32 0, i32 0\n",
-                ptr = ptr, b = b, fn_name = fn_name, si = si,
+                "  %r{reg} = getelementptr inbounds [{b} x i8], [{b} x i8]* @str.{fn_name}.{si}, i32 0, i32 0\n",
+                reg = reg, b = b, fn_name = fn_name, si = si,
             ));
+            (format!("%r{}", reg), LlvmType::I8Ptr)
+        }
+
+        Expr::Var(name) => {
+            let _type = infer_llvm_type(arena, id, &ctx.var_types);
+            let llvm_type = _type.get_alloca_type();
+            let reg = state.next_reg();
+
             out.push_str(&format!(
-                "  call i32 @puts(i8* %r{ptr})\n", ptr = ptr,
+                "  %r{reg} = load {_type}, {_type}* %{name}\n",
+                reg = reg, _type = llvm_type, name = name,
             ));
+            (format!("%r{}", reg), _type)
         }
 
-        PrintlnArg::Var(name) => {
-            let _type = ctx.var_types.get(name)
-                .unwrap_or_else(|| generate_error!("Undefined variable: {}", name));
+        Expr::Binary { left, op, right } => {
+            let (l_value, l_type) = emit_expr(out, arena, *left, fn_name, ctx, state);
+            let (r_value, _) = emit_expr(out, arena, *right, fn_name, ctx, state);
 
-            match _type {
-                Type::Unt | Type::Int | Type::Float => {
-                    let fi = state.fmt_idx;
-                    state.fmt_idx += 1;
-                    let fmt = &ctx.num_fmts[fi];
-                    let fb = fmt.len() + 1;
-                    let rf = state.next_reg();
-                    let rv = state.next_reg();
+            let instr = llvm_instr_for_operator_by_type(op, &l_type);
+            let llvm_type = l_type.get_alloca_type();
+            let reg = state.next_reg();
 
-                    out.push_str(&format!(
-                        "  %r{rf} = getelementptr inbounds [{fb} x i8], [{fb} x i8]* @fmt.{fn_name}.{fi}, i32 0, i32 0\n",
-                        rf = rf, fb = fb, fn_name = fn_name, fi = fi,
-                    ));
-
-                    match _type {
-                        Type::Unt | Type::Int => {
-                            out.push_str(&format!(
-                                "  %r{rv} = load i64, i64* %{name}\n",
-                                rv = rv, name = name,
-                            ));
-                            out.push_str(&format!(
-                                "  call i32 (i8*, ...) @printf(i8* %r{rf}, i64 %r{rv})\n",
-                                rf = rf, rv = rv,
-                            ));
-                        }
-                        Type::Float => {
-                            out.push_str(&format!(
-                                "  %r{rv} = load double, double* %{name}\n",
-                                rv = rv, name = name,
-                            ));
-                            out.push_str(&format!(
-                                "  call i32 (i8*, ...) @printf(i8* %r{rf}, double %r{rv})\n",
-                                rf = rf, rv = rv,
-                            ));
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-
-                Type::Bool => {
-                    let rb = state.next_reg();
-                    let rt = state.next_reg();
-                    let rf = state.next_reg();
-                    let rs = state.next_reg();
-
-                    out.push_str(&format!(
-                        "  %r{rb} = load i1, i1* %{name}\n",
-                        rb = rb, name = name,
-                    ));
-                    out.push_str(&format!(
-                       "  %r{rt} = getelementptr inbounds [5 x i8], [5 x i8]* @bool.true, i32 0, i32 0\n",
-                        rt = rt,
-                    ));
-                    out.push_str(&format!(
-                        "  %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @bool.false, i32 0, i32 0\n",
-                        rf = rf,
-                    ));
-
-                    out.push_str(&format!(
-                        "  %r{rs} = select i1 %r{rb}, i8* %r{rt}, i8* %r{rf}\n",
-                        rs = rs, rb = rb, rt = rt, rf = rf,
-                    ));
-                    out.push_str(&format!(
-                        "  call i32 @puts(i8* %r{rs})\n",
-                        rs = rs,
-                    ));
-                }
-
-                Type::Str => {
-                    let rv = state.next_reg();
-
-                    out.push_str(&format!(
-                        "  %r{rv} = load i8*, i8** %{name}\n",
-                        rv = rv, name = name,
-                    ));
-                    out.push_str(&format!(
-                        "  call i32 @puts(i8* %r{rv})\n",
-                        rv = rv,
-                    ));
-                }
-            }
+            out.push_str(&format!(
+                "  %r{reg} = {instr} {_type} {l_value}, {r_value}\n",
+                reg = reg, instr = instr, _type = llvm_type, l_value = l_value, r_value = r_value,
+            ));
+            (format!("%r{}", reg), l_type)
         }
+    }
+}
+
+fn llvm_instr_for_operator_by_type(op: &Operand, llvm_type: &LlvmType) -> &'static str {
+    match (op, llvm_type) {
+        (Operand::Plus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "add",
+        (Operand::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "sub",
+        (Operand::Mul, LlvmType::I64Unsigned | LlvmType::I64Signed) => "mul",
+
+        (Operand::Div, LlvmType::I64Unsigned) => "udiv",
+        (Operand::Div, LlvmType::I64Signed) => "sdiv",
+        (Operand::Rem, LlvmType::I64Unsigned) => "urem",
+        (Operand::Rem, LlvmType::I64Signed) => "srem",
+
+        (Operand::Plus, LlvmType::Double) => "fadd",
+        (Operand::Minus, LlvmType::Double) => "fsub",
+        (Operand::Mul, LlvmType::Double) => "fmul",
+        (Operand::Div, LlvmType::Double) => "fdiv",
+        (Operand::Rem, LlvmType::Double) => "frem",
+
+        _ => unreachable!(),
     }
 }
 
@@ -228,6 +219,49 @@ fn escape_llvm(s: &str) -> String {
     }).collect()
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum LlvmType {
+    I64Unsigned,
+    I64Signed,
+    Double,
+    I1,
+    I8Ptr
+}
+
+impl LlvmType {
+    fn get_alloca_type(&self) -> &'static str {
+        match self {
+            LlvmType::I64Unsigned => "i64",
+            LlvmType::I64Signed => "i64",
+            LlvmType::Double => "double",
+            LlvmType::I1 => "i1",
+            LlvmType::I8Ptr => "i8*",
+        }
+    }
+}
+
+fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String, Type>) -> LlvmType {
+    match arena.get(id) {
+        Expr::Unt(_) => LlvmType::I64Unsigned,
+        Expr::Int(_) => LlvmType::I64Signed,
+        Expr::Float(_) => LlvmType::Double,
+        Expr::Bool(_) => LlvmType::I1,
+        Expr::Str(_) => LlvmType::I8Ptr,
+
+        Expr::Var(name) => {
+            match var_types.get(name).unwrap() {
+                Type::Unt => LlvmType::I64Unsigned,
+                Type::Int => LlvmType::I64Signed,
+                Type::Float => LlvmType::Double,
+                Type::Bool => LlvmType::I1,
+                Type::Str => LlvmType::I8Ptr,
+            }
+        }
+
+        Expr::Binary { left, ..} => infer_llvm_type(arena, *left, var_types),
+    }
+}
+
 struct FuncCtx {
     str_consts: Vec<String>,
     num_fmts: Vec<String>,
@@ -235,8 +269,8 @@ struct FuncCtx {
 }
 
 impl FuncCtx {
-    fn build(func: &FuncDef) -> FuncCtx {
-        let mut str_consts = Vec::new();
+    fn build(func: &FuncDef, arena: &ExprArena) -> FuncCtx {
+        let mut str_consts: Vec<String> = Vec::new();
         let mut num_fmts = Vec::new();
         let mut var_types = HashMap::new();
 
@@ -245,28 +279,27 @@ impl FuncCtx {
                 Stmt::VarDecl(v) => {
                     var_types.insert(v.name.clone(), v._type.clone());
 
-                    if let Value::Str(s) = &v.value {
+                    if let Expr::Str(s) = arena.get(v.value) {
+                         str_consts.push(s.clone());
+                    }
+                }
+                Stmt::Println(id) => {
+                    if let Expr::Str(s) = arena.get(*id) {
                         str_consts.push(s.clone());
                     }
                 }
-                Stmt::Println(PrintlnArg::StringLit(s)) => {
-                    str_consts.push(s.clone());
-                }
-                Stmt::Println(PrintlnArg::Var(_)) => {}
             }
         }
 
         for stmt in &func.body {
-            if let Stmt::Println(PrintlnArg::Var(name)) = stmt {
-                let _type = var_types.get(name)
-                    .unwrap_or_else(|| generate_error!("Undefined variable: {}", name));
+            if let Stmt::Println(expr_id) = stmt {
+                let _type = infer_llvm_type(arena, *expr_id, &var_types);
 
                 let fmt = match _type {
-                    Type::Unt => Some("%llu\n"),
-                    Type::Int => Some("%lld\n"),
-                    Type::Float => Some("%g\n"),
-                    Type::Bool => None,
-                    Type::Str => None,
+                    LlvmType::I64Unsigned => Some("%llu\n"),
+                    LlvmType::I64Signed => Some("%lld\n"),
+                    LlvmType::Double => Some("%g\n"),
+                    _ => None,
                 };
 
                 if let Some(f) = fmt {
@@ -295,5 +328,5 @@ impl EmitState {
         self.reg += 1;
         r
     }
-}*/
+}
 
