@@ -1,7 +1,5 @@
-/target
-/tests
-Cargo.lock
-Cargo.toml
-/.idea
-/.vscode
-/.zed
+target/
+tests/
+.idea/
+.vscode/
+.zed/

@@ -28,7 +28,7 @@ pub fn analyze(program: &Program) {
             match stmt {
                 Stmt::VarDecl(v) => {
                     if declared.contains_key(&v.name) {
-                        generate_error!("Variable '{}' is already declared", v.name);
+                        generate_error!("Variable `{}` is already declared", v.name);
                     }
 
                     let expr_type = infer_type(&program.expr_arena, v.value, &declared);
@@ -59,7 +59,7 @@ fn infer_type(
 
         Expr::Var(name) => {
             let _type = declared.get(name).unwrap_or_else(|| {
-                generate_error!("Variable '{}' is not declared", name);
+                generate_error!("Variable `{}` is not declared", name);
             }).clone();
             
             TS::Var(_type)
@@ -72,7 +72,7 @@ fn infer_type(
             let resolved = resolve_binary_type(&left, &right);
 
             resolved.unwrap_or_else(|| {
-                generate_error!("Cannot apply operator '{}' for types: '{}' and '{}'", op, left.get_type(), right.get_type());
+                generate_error!("Cannot apply operator `{}` for types: `{}` and `{}`", op, left.get_type(), right.get_type());
             })
         }
     }
@@ -155,7 +155,7 @@ fn check_compat(
 
     if !ok {
         generate_error!(
-            "Cannot assign '{}' to variable '{}' of type '{}'",
+            "Cannot assign {} value to variable `{}` of type `{}`",
             expr_ts.get_type(), var_name, var_type
         )
     }
@@ -169,7 +169,7 @@ fn check_vars_declared(
     match arena.get(expr_id) {
         Expr::Var(name) => {
             if !declared.contains_key(name) {
-                generate_error!("Variable '{}' is not declared", name)
+                generate_error!("Variable `{}` is not declared", name)
             }
         }
 

@@ -25,6 +25,18 @@ pub enum Token {
     Div,
     Rem,
 
+    And,
+    Or,
+    Xor,
+    Not,
+    
+    IsEqual,
+    NotEqual,
+    GreatThan,
+    LessThan,
+    GreatThanEqual,
+    LessThanEqual,
+
     LParen,
     RParen,
     LBrace,
@@ -54,12 +66,22 @@ impl fmt::Display for Token {
             Token::Mul => write!(f, "*"),
             Token::Div => write!(f, "/"),
             Token::Rem => write!(f, "%"),
+            Token::And => write!(f, "&&"),
+            Token::Or => write!(f, "||"),
+            Token::Xor => write!(f, "^^"),
+            Token::Not => write!(f, "!"),
+            Token::IsEqual => write!(f, "=="),
+            Token::NotEqual => write!(f, "!="),
+            Token::GreatThan => write!(f, ">"),
+            Token::LessThan => write!(f, "<"),
+            Token::GreatThanEqual => write!(f, ">="),
+            Token::LessThanEqual => write!(f, "<="),
             Token::LParen => write!(f, "("),
             Token::RParen => write!(f, ")"),
             Token::LBrace => write!(f, "{{"),
             Token::RBrace => write!(f, "}}"),
             Token::Semicolon => write!(f, ";"),
-            Token::Eof => write!(f, "'End_Of_File'"),
+            Token::Eof => write!(f, "`End_Of_File`"),
         }
     }
 }
@@ -90,6 +112,23 @@ impl Lexer {
         let c = self.chars.get(self.pos).copied();
         self.pos += 1;
         c
+    }
+
+    fn match_next(&mut self, next: char, yes: Token, no: Token) -> Token {
+        if self.peek() == Some(next) {
+            self.scroll();
+            yes
+        } else {
+            no
+        }
+    }
+
+    fn match_next_or_err(&mut self, next: char, yes: Token) -> Token {
+        if self.peek() != Some(next) {
+            generate_error!("Unexpected character: `{}`", next);
+        }
+        self.scroll();
+        yes
     }
 
     fn skip_whitespace(&mut self) {
@@ -134,12 +173,18 @@ impl Lexer {
             Some('{') => Token::LBrace,
             Some('}') => Token::RBrace,
             Some(';') => Token::Semicolon,
-            Some('=') => Token::Equal,
+            Some('=') => self.match_next('=', Token::IsEqual, Token::Equal),
             Some('+') => Token::Plus,
             Some('-') => Token::Minus,
             Some('*') => Token::Mul,
             Some('/') => Token::Div,
             Some('%') => Token::Rem,
+            Some('&') => self.match_next_or_err('&', Token::And),
+            Some('|') => self.match_next_or_err('|', Token::Or),
+            Some('^') => self.match_next_or_err('^', Token::Xor),
+            Some('!') => self.match_next('=', Token::NotEqual, Token::Not),
+            Some('>') => self.match_next('=', Token::GreatThanEqual, Token::GreatThan),
+            Some('<') => self.match_next('=', Token::LessThanEqual, Token::LessThan),
 
             Some(q @ '"') => {
                 let mut s = String::new();
@@ -155,7 +200,7 @@ impl Lexer {
                             '"' => '"',
                             '\\' => '\\',
                             other => {
-                                generate_error!("Cannot resolve: '\\{}' unicode", other);
+                                generate_error!("Cannot resolve: `\\{}` unicode", other);
                             },
                         };
 
@@ -223,7 +268,7 @@ impl Lexer {
                 }
             }
 
-            Some(other) => generate_error!("Unrecognized character: {}", other),
+            Some(other) => generate_error!("Unrecognized character: `{}`", other),
         };
 
         kind

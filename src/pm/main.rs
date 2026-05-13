@@ -14,51 +14,96 @@ const HELP_TEXT: &str = "lit - Lit package manager\n\
 \n\
 \x1B[1mCommands:\x1B[0m\n  \
   new [name]   Create a new project\n  \
-  build        Compile the current project\n  \
-  run          Compile and run the current project\n  \
-  help         Print this help message\n  \
+  build        Compile project\n  \
+  run          Compile and run project\n  \
+  check        Only checks project for semantic errors \n\
 \n\
 \x1B[1m[Options]\x1B[0m\n  \
-  -h, --help       Show this help message\n  \
-  -v, --version    Show version\
+  -h, --help             Show this help message\n  \
+  -v, --version          Show version\n  \
+  --litc-args \"args\"   Adds compiler arguments if you build or run\
 ";
 
 enum Cmd {
     New { name: String },
     Build,
     Run,
-    Version,
-    Help,
+    Check,
 }
 
-impl Cmd {
-    fn parse(args: &[String]) -> Cmd {
+struct Options {
+    cmd: Cmd,
+    litc_args: Vec<String>,
+}
+
+impl Options {
+    fn parse(args: &[String]) -> Options {
         if args.is_empty() {
-            return Cmd::Help;
+            println!("Guide for lit: ");
+            Options::help();
+            process::exit(0);
         }
 
-        match args[0].as_str() {
-            "new" => {
-                if args.len() < 2 {
-                    generate_error!("Expected project name\nUsage: lit new <name>");
+        let mut cmd: Option<Cmd> = None;
+        let mut litc_args = Vec::new();
+
+        let mut i = 0;
+        while i < args.len() {
+            match args[i].as_str() {
+                "-h" | "--help" => {
+                    Options::help();
+                    process::exit(0);
                 }
-                Cmd::New { name: args[1].clone() }
+
+                "-v" | "--version" => {
+                    Options::version();
+                    process::exit(0);
+                }
+
+                "new" => {
+                    i += 1;
+                    if i >= args.len() {
+                        generate_error!("Expected project name after command `new`\nUsage: lit new <name>");
+                    }
+
+                    cmd = Some(Cmd::New { name: args[i].clone() })
+                }
+
+                "build" => cmd = Some(Cmd::Build),
+                "run" => cmd = Some(Cmd::Run),
+                "check" => cmd = Some(Cmd::Check),
+
+                "--litc-args" => {
+                    i += 1;
+                    if i >= args.len() {
+                        generate_error!("Expected compiler arguments after option `--litc-args`\nUsage: lit ... --litc-args \"args\"");
+                    }
+
+                    let mut cur = String::new();
+                    for c in args[i].chars() {
+                        if c == ' ' {
+                            litc_args.push(cur);
+                            cur = String::new();
+                            continue;
+                        }
+                        cur.push(c);
+                    }
+                    litc_args.push(cur);
+                }
+
+                other => {
+                    println!("Unknown option: `{}`. Use: lit -h to get help", other);
+                    process::exit(0);
+                },
             }
 
-            "build" => Cmd::Build,
-            "run" => Cmd::Run,
-
-            "-v" | "--version" => Cmd::Version,
-            "-h" | "--help" | "help" => Cmd::Help,
-
-            other => {
-                println!("Unknown command: `{}`. To know: ", other);
-                Cmd::Help
-            },
+            i += 1;
         }
+
+        Options { cmd: cmd.unwrap(), litc_args }
     }
 
-    fn cmd_new(name: &str) {
+    fn new(name: &str) {
         if Path::new(name).exists() {
             generate_error!("Directory `{}` already exists!", name);
         }
@@ -69,7 +114,7 @@ impl Cmd {
 
         fs::write(
             format!("{}/build.toml", name),
-            format!("[project]\nname = `{}`\nversion = `0.1.0`", name),
+            format!("[project]\nname = \"{}\"\n", name),
         ).unwrap();
 
         fs::create_dir_all(format!("{}/out/bin", name)).unwrap_or_else(|e| {
@@ -98,19 +143,20 @@ impl Cmd {
         println!("{}", s);
     }
 
-    fn cmd_build(run_after: bool) {
+    fn build(litc_args: Vec<String>, run_after: bool) {
         let toml = fs::read_to_string("build.toml").unwrap_or_else(|e| {
             generate_error!("Cannot read `build.toml` due to: {}", e);
         });
-        let project_name = Cmd::parse_toml_name(&toml);
+        let project_name = Options::parse_toml_name(&toml);
 
         let src_path = "src/main.lit";
-        let ll_path = format!("out/ir/{}.ll", project_name);
-        let exe_path = format!("out/bin/{}.exe", project_name);
+        let ll_path = &format!("out/ir/{}.ll", project_name);
+        let exe_path = &format!("out/bin/{}.exe", project_name);
 
         println!("[1/2] Compiling `{}`...", src_path);
         let litc = Command::new("litc")
-            .args([src_path, "-o", &ll_path])
+            .args(litc_args)
+            .args([src_path, "-o", ll_path])
             .status()
             .unwrap_or_else(|_| generate_error!("Cannot run `litc`. Is it installed?"));
 
@@ -121,9 +167,9 @@ impl Cmd {
             .args([
                 "--target=x86_64-pc-windows-gnu",
                 "-Wno-override-module",
-                &ll_path,
+                ll_path,
                 "-o",
-                &exe_path,
+                exe_path,
             ])
             .status()
             .unwrap_or_else(|_| generate_error!("Failed to run `clang`. Is it installed?"));
@@ -158,24 +204,35 @@ impl Cmd {
         generate_error!("Cannot find attribute: `name` in build.toml")
     }
 
-    fn cmd_version() {
+    fn check() {
+        let src_path = "src/main.lit";
+
+        println!("[1/1] Checking `{}`...", src_path);
+        Command::new("litc")
+            .args(["-S", src_path])
+            .status()
+            .unwrap_or_else(|_| generate_error!("Cannot run `litc`. Is it installed?"));
+    }
+
+    fn version() {
         println!("Lit package manager - {}", VERSION);
     }
 
-    fn cmd_help() {
+    fn help() {
         println!("{}", HELP_TEXT);
     }
 }
 
 fn main() {
     let argv: Vec<String> = env::args().skip(1).collect();
-    let cmd = Cmd::parse(&argv);
+    let options = Options::parse(&argv);
 
-    match cmd {
-        Cmd::New { name } => Cmd::cmd_new(&name),
-        Cmd::Build => Cmd::cmd_build(false),
-        Cmd::Run => Cmd::cmd_build(true),
-        Cmd::Version => Cmd::cmd_version(),
-        Cmd::Help => Cmd::cmd_help(),
+    match options.cmd {
+        Cmd::New { name } => {
+            Options::new(&name);
+        }
+        Cmd::Build => Options::build(options.litc_args, false),
+        Cmd::Run => Options::build(options.litc_args, true),
+        Cmd::Check => Options::check(),
     }
 }

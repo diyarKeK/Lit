@@ -41,7 +41,7 @@ impl Parser {
         let got = self.advance();
 
         if got != expected {
-            generate_error!("Parse error: expected '{}' but got '{}'", expected, got);
+            generate_error!("Parse error: expected `{}`, but got `{}`", expected, got);
         }
     }
 
@@ -64,7 +64,7 @@ impl Parser {
         let name = match self.advance() {
             Token::Ident(n) => n,
 
-            other => generate_error!("Expected function name after 'fun', but got {:?}", other),
+            other => generate_error!("Expected function name after `fun`, but got `{}`", other),
         };
 
         self.expect(Token::LParen);
@@ -232,7 +232,7 @@ impl Parser {
                     Token::UntLit(n) => self.expr_arena.add(Expr::Int(-(n as i64))),
                     Token::FloatLit(f) => self.expr_arena.add(Expr::Float(-f)),
 
-                    other => generate_error!("Expected number after '-', got: `{}`", other),
+                    other => generate_error!("Expected digits after `-`, got: `{}`", other),
                 }
             }
 
@@ -240,13 +240,13 @@ impl Parser {
                 let expr_id = self.parse_expr();
 
                 if self.advance() != Token::RParen {
-                    generate_error!("Expected ')' to close left paren in expression")
+                    generate_error!("Expected `)` to close left paren in expression")
                 }
 
                 expr_id
             },
 
-            other => generate_error!("Invalid expression: {}", other),
+            other => generate_error!("Invalid expression: `{}`", other),
         }
     }
 }

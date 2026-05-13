@@ -73,14 +73,14 @@ impl Options {
                 "-o" => {
                     i += 1;
                     if i >= args.len() {
-                        generate_error!("Expected output path after '-o'");
+                        generate_error!("Expected output path after `-o`");
                     }
 
                     output = Some(PathBuf::from(&args[i]));
                 }
 
                 arg if arg.starts_with("-") => {
-                    generate_error!("Unexpected option: '{}'", arg);
+                    generate_error!("Unexpected option: `{}`", arg);
                 }
 
                 path => {
@@ -134,7 +134,7 @@ fn main() {
             println!("Took: {:?}", now.elapsed());
         }
 
-        println!("\n\x1B[1;32m[Analysis complete]\x1B[0m: No Semantic errors found");
+        println!("\x1B[1;32m[Analysis complete]\x1B[0m: No Semantic errors found");
         return;
     }
 
