@@ -2,11 +2,15 @@ interface Formatter {
     fun fmt(): str;
 }
 
-class StrBuilder {
-    Vec<> chars;
+class String {
+    Vec<u8> chars;
 
-    StrBuilder() {
-        
+    String() {
+        self.chars = Vec::new();
+    }
+
+    String(unt init_capacity) {
+        self.chars = Vec::with_capacity(init_capacity);
     }
 
     fun to_str(): str {
@@ -14,8 +18,12 @@ class StrBuilder {
     }
 }
 
-module StrBuilder {
-    fun new(): StrBuilder {
-        return StrBuilder();
+module String {
+    fun new(): String {
+        return String();
+    }
+
+    fun with_capacity(unt init_capacity): String {
+        return String(init_capacity);
     }
 }

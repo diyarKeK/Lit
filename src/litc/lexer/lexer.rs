@@ -1,91 +1,7 @@
-use std::fmt;
-use std::process;
 use crate::generate_error;
+use super::token::Token;
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Token {
-    Fun,
-
-    Unt,
-    Int,
-    Float,
-    Bool,
-    Str,
-
-    Ident(String),
-    StringLit(String),
-    UntLit(u64),
-    FloatLit(f64),
-    BoolLit(bool),
-
-    Equal,
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    Rem,
-
-    And,
-    Or,
-    Xor,
-    Not,
-    
-    IsEqual,
-    NotEqual,
-    GreatThan,
-    LessThan,
-    GreatThanEqual,
-    LessThanEqual,
-
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    Semicolon,
-
-    Eof,
-}
-
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Token::Fun => write!(f, "fun"),
-            Token::Unt => write!(f, "unt"),
-            Token::Int => write!(f, "int"),
-            Token::Float => write!(f, "float"),
-            Token::Bool => write!(f, "bool"),
-            Token::Str => write!(f, "str"),
-            Token::Ident(name) => write!(f, "{}", name),
-            Token::StringLit(s) => write!(f, "\"{}\"", s),
-            Token::UntLit(n) => write!(f, "{}", n),
-            Token::FloatLit(n) => write!(f, "{}", n),
-            Token::BoolLit(b) => write!(f, "{}", b),
-            Token::Equal => write!(f, "="),
-            Token::Plus => write!(f, "+"),
-            Token::Minus => write!(f, "-"),
-            Token::Mul => write!(f, "*"),
-            Token::Div => write!(f, "/"),
-            Token::Rem => write!(f, "%"),
-            Token::And => write!(f, "&&"),
-            Token::Or => write!(f, "||"),
-            Token::Xor => write!(f, "^^"),
-            Token::Not => write!(f, "!"),
-            Token::IsEqual => write!(f, "=="),
-            Token::NotEqual => write!(f, "!="),
-            Token::GreatThan => write!(f, ">"),
-            Token::LessThan => write!(f, "<"),
-            Token::GreatThanEqual => write!(f, ">="),
-            Token::LessThanEqual => write!(f, "<="),
-            Token::LParen => write!(f, "("),
-            Token::RParen => write!(f, ")"),
-            Token::LBrace => write!(f, "{{"),
-            Token::RBrace => write!(f, "}}"),
-            Token::Semicolon => write!(f, ";"),
-            Token::Eof => write!(f, "`End_Of_File`"),
-        }
-    }
-}
-
+use std::process;
 
 pub struct Lexer {
     chars: Vec<char>,
@@ -112,23 +28,6 @@ impl Lexer {
         let c = self.chars.get(self.pos).copied();
         self.pos += 1;
         c
-    }
-
-    fn match_next(&mut self, next: char, yes: Token, no: Token) -> Token {
-        if self.peek() == Some(next) {
-            self.scroll();
-            yes
-        } else {
-            no
-        }
-    }
-
-    fn match_next_or_err(&mut self, next: char, yes: Token) -> Token {
-        if self.peek() != Some(next) {
-            generate_error!("Unexpected character: `{}`", next);
-        }
-        self.scroll();
-        yes
     }
 
     fn skip_whitespace(&mut self) {
@@ -173,18 +72,18 @@ impl Lexer {
             Some('{') => Token::LBrace,
             Some('}') => Token::RBrace,
             Some(';') => Token::Semicolon,
-            Some('=') => self.match_next('=', Token::IsEqual, Token::Equal),
+            Some('=') => Token::Equal,
             Some('+') => Token::Plus,
             Some('-') => Token::Minus,
             Some('*') => Token::Mul,
             Some('/') => Token::Div,
             Some('%') => Token::Rem,
-            Some('&') => self.match_next_or_err('&', Token::And),
-            Some('|') => self.match_next_or_err('|', Token::Or),
-            Some('^') => self.match_next_or_err('^', Token::Xor),
-            Some('!') => self.match_next('=', Token::NotEqual, Token::Not),
-            Some('>') => self.match_next('=', Token::GreatThanEqual, Token::GreatThan),
-            Some('<') => self.match_next('=', Token::LessThanEqual, Token::LessThan),
+            Some('&') => Token::And,
+            Some('|') => Token::Or,
+            Some('^') => Token::Xor,
+            Some('!') => Token::Bang,
+            Some('>') => Token::Gt,
+            Some('<') => Token::Lt,
 
             Some(q @ '"') => {
                 let mut s = String::new();

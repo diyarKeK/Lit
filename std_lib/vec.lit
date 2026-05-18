@@ -1,4 +1,4 @@
-import strings::[Formatter, StringBuilder];
+import strings::[Formatter, String];
 
 class Vec<T> : Formatter {
     T[] data;
@@ -48,7 +48,7 @@ class Vec<T> : Formatter {
 
     #[T : Formatter]
     override fun fmt(): str {
-        StrBuilder builder = StrBuilder::new();
+        String builder = String::new();
 
         builder.push('[');
 

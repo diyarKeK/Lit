@@ -1,24 +1,9 @@
 use std::collections::HashMap;
 use std::process;
 
-use crate::analyzer::TypeSource as TS;
+use super::TypeSource;
 use crate::ast::*;
 use crate::generate_error;
-
-#[derive(Debug, Clone)]
-enum TypeSource {
-    Lit(Type),
-    Var(Type),
-}
-
-impl TypeSource {
-    fn get_type(&self) -> &Type {
-        match self {
-            TS::Lit(t) => t,
-            TS::Var(t) => t,
-        }
-    }
-}
 
 pub fn analyze(program: &Program) {
     for func in &program.funcs {
@@ -51,21 +36,21 @@ fn infer_type(
     declared: &HashMap<String, Type>
 ) -> TypeSource {
     match arena.get(id) {
-        Expr::Unt(_) => TS::Lit(Type::Unt),
-        Expr::Int(_) => TS::Lit(Type::Int),
-        Expr::Float(_) => TS::Lit(Type::Float),
-        Expr::Bool(_) => TS::Lit(Type::Bool),
-        Expr::Str(_) => TS::Lit(Type::Str),
+        Expr::Lit(Lit::Unt(_)) => TypeSource::Lit(Type::Unt),
+        Expr::Lit(Lit::Int(_)) => TypeSource::Lit(Type::Int),
+        Expr::Lit(Lit::Float(_)) => TypeSource::Lit(Type::Float),
+        Expr::Lit(Lit::Bool(_)) => TypeSource::Lit(Type::Bool),
+        Expr::Lit(Lit::Str(_)) => TypeSource::Lit(Type::Str),
 
         Expr::Var(name) => {
             let _type = declared.get(name).unwrap_or_else(|| {
                 generate_error!("Variable `{}` is not declared", name);
             }).clone();
             
-            TS::Var(_type)
+            TypeSource::Var(_type)
         }
 
-        Expr::Binary { left, op, right} => {
+        Expr::Binary { op, left, right} => {
             let left = infer_type(arena, *left, declared);
             let right = infer_type(arena, *right, declared);
 
@@ -80,26 +65,26 @@ fn infer_type(
 
 fn resolve_binary_type(left: &TypeSource, right: &TypeSource) -> Option<TypeSource> {
     match (left, right) {
-        (TS::Var(a), TS::Var(b)) => {
+        (TypeSource::Var(a), TypeSource::Var(b)) => {
             if a == b && is_num_type(a) && is_num_type(b) {
-                Some(TS::Var(a.clone()))
+                Some(TypeSource::Var(a.clone()))
             } else {
                 None
             }
         }
 
-        (TS::Var(a), TS::Lit(b)) |
-        (TS::Lit(b), TS::Var(a))
+        (TypeSource::Var(a), TypeSource::Lit(b)) |
+        (TypeSource::Lit(b), TypeSource::Var(a))
             => {
             if does_literal_num_fits_in(b, a) {
-                Some(TS::Var(a.clone()))
+                Some(TypeSource::Var(a.clone()))
             } else {
                 None
             }
         }
 
-        (TS::Lit(a), TS::Lit(b)) => {
-            numeric_tower(a, b).map(TS::Lit)
+        (TypeSource::Lit(a), TypeSource::Lit(b)) => {
+            numeric_tower(a, b).map(TypeSource::Lit)
         }
     }
 }
@@ -143,12 +128,12 @@ fn check_compat(
     var_name: &String
 ) {
     let ok = match (var_type, expr_ts) {
-        (a, TS::Var(b)) if a == b => true,
-        (a, TS::Lit(b)) if a == b => true,
+        (a, TypeSource::Var(b)) if a == b => true,
+        (a, TypeSource::Lit(b)) if a == b => true,
 
-        (Type::Int, TS::Lit(Type::Unt)) => true,
-        (Type::Float, TS::Lit(Type::Unt)) => true,
-        (Type::Float, TS::Lit(Type::Int)) => true,
+        (Type::Int, TypeSource::Lit(Type::Unt)) => true,
+        (Type::Float, TypeSource::Lit(Type::Unt)) => true,
+        (Type::Float, TypeSource::Lit(Type::Int)) => true,
 
         _ => false,
     };
@@ -173,7 +158,7 @@ fn check_vars_declared(
             }
         }
 
-        Expr::Binary { left, op: _, right} => {
+        Expr::Binary { op: _, left, right} => {
             check_vars_declared(arena, *left, declared);
             check_vars_declared(arena, *right, declared);
         }

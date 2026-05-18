@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use super::LlvmType;
+use super::FuncCtx;
+use super::EmitState;
 use crate::ast::*;
 
 pub fn generate(program: &Program) -> String {
@@ -22,7 +25,7 @@ pub fn generate(program: &Program) -> String {
 fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
     let ctx = FuncCtx::build(func, expr_arena);
 
-    for (i, s) in ctx.str_consts.iter().enumerate() {
+    for (i, s) in ctx.get_string_consts().iter().enumerate() {
         let b = s.len() + 1;
         out.push_str(&format!(
            "@str.{fn_name}.{i} = private unnamed_addr constant [{b} x i8] c\"{esc}\\00\"\n",
@@ -30,7 +33,7 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
         ));
     }
 
-    for (i, fmt) in ctx.num_fmts.iter().enumerate() {
+    for (i, fmt) in ctx.get_num_fmts().iter().enumerate() {
         let b = fmt.len() + 1;
         out.push_str(&format!(
             "@fmt.{fn_name}.{i} = private unnamed_addr constant [{b} x i8] c\"{esc}\\00\"\n",
@@ -63,7 +66,7 @@ fn emit_vardecl(
     ctx: &FuncCtx,
     state: &mut EmitState,
 ) {
-    let llvm_type = infer_llvm_type(arena, v.value, &ctx.var_types);
+    let llvm_type = infer_llvm_type(arena, v.value, ctx.get_var_types());
     let alloca_type = llvm_type.get_alloca_type();
 
     out.push_str(&format!("  %{name} = alloca {_type}\n", name = v.name, _type = alloca_type));
@@ -84,14 +87,13 @@ fn emit_println(
     ctx: &FuncCtx,
     state: &mut EmitState
 ) {
-    let _type = infer_llvm_type(arena, expr_id, &ctx.var_types);
+    let _type = infer_llvm_type(arena, expr_id, ctx.get_var_types());
     let val = emit_expr(out, arena, expr_id, fn_name, ctx, state).0;
 
     match _type {
         LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::Double => {
-            let fi = state.fmt_idx;
-            state.fmt_idx += 1;
-            let fmt = &ctx.num_fmts[fi];
+            let fi = state.next_fmt_idx();
+            let fmt = &ctx.get_num_fmts()[fi];
             let fb = fmt.len() + 1;
             let rf = state.next_reg();
             let llvm_type = _type.get_alloca_type();
@@ -141,14 +143,13 @@ fn emit_expr(
     state: &mut EmitState
 ) -> (String, LlvmType) {
     match arena.get(id) {
-        Expr::Unt(u) => (format!("{}", *u as i64), LlvmType::I64Unsigned),
-        Expr::Int(i) => (format!("{}", i), LlvmType::I64Signed),
-        Expr::Float(f) => (format!("{:.6e}", f), LlvmType::Double),
-        Expr::Bool(b) => (format!("{}", *b as i32), LlvmType::I1),
-        Expr::Str(s) => {
+        Expr::Lit(Lit::Unt(u)) => (format!("{}", *u as i64), LlvmType::I64Unsigned),
+        Expr::Lit(Lit::Int(i)) => (format!("{}", i), LlvmType::I64Signed),
+        Expr::Lit(Lit::Float(f)) => (format!("{:.6e}", f), LlvmType::Double),
+        Expr::Lit(Lit::Bool(b)) => (format!("{}", *b as i32), LlvmType::I1),
+        Expr::Lit(Lit::Str(s)) => {
             let b = s.len() + 1;
-            let si = state.str_idx;
-            state.str_idx += 1;
+            let si = state.next_str_idx();
             let reg = state.next_reg();
 
             out.push_str(&format!(
@@ -159,7 +160,7 @@ fn emit_expr(
         }
 
         Expr::Var(name) => {
-            let _type = infer_llvm_type(arena, id, &ctx.var_types);
+            let _type = infer_llvm_type(arena, id, ctx.get_var_types());
             let llvm_type = _type.get_alloca_type();
             let reg = state.next_reg();
 
@@ -170,7 +171,7 @@ fn emit_expr(
             (format!("%r{}", reg), _type)
         }
 
-        Expr::Binary { left, op, right } => {
+        Expr::Binary { op, left, right } => {
             let (l_value, l_type) = emit_expr(out, arena, *left, fn_name, ctx, state);
             let (r_value, _) = emit_expr(out, arena, *right, fn_name, ctx, state);
 
@@ -187,22 +188,22 @@ fn emit_expr(
     }
 }
 
-fn llvm_instr_for_operator_by_type(op: &Operand, llvm_type: &LlvmType) -> &'static str {
+fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'static str {
     match (op, llvm_type) {
-        (Operand::Plus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "add",
-        (Operand::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "sub",
-        (Operand::Mul, LlvmType::I64Unsigned | LlvmType::I64Signed) => "mul",
+        (BinaryOp::Plus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "add",
+        (BinaryOp::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "sub",
+        (BinaryOp::Mul, LlvmType::I64Unsigned | LlvmType::I64Signed) => "mul",
 
-        (Operand::Div, LlvmType::I64Unsigned) => "udiv",
-        (Operand::Div, LlvmType::I64Signed) => "sdiv",
-        (Operand::Rem, LlvmType::I64Unsigned) => "urem",
-        (Operand::Rem, LlvmType::I64Signed) => "srem",
+        (BinaryOp::Div, LlvmType::I64Unsigned) => "udiv",
+        (BinaryOp::Div, LlvmType::I64Signed) => "sdiv",
+        (BinaryOp::Rem, LlvmType::I64Unsigned) => "urem",
+        (BinaryOp::Rem, LlvmType::I64Signed) => "srem",
 
-        (Operand::Plus, LlvmType::Double) => "fadd",
-        (Operand::Minus, LlvmType::Double) => "fsub",
-        (Operand::Mul, LlvmType::Double) => "fmul",
-        (Operand::Div, LlvmType::Double) => "fdiv",
-        (Operand::Rem, LlvmType::Double) => "frem",
+        (BinaryOp::Plus, LlvmType::Double) => "fadd",
+        (BinaryOp::Minus, LlvmType::Double) => "fsub",
+        (BinaryOp::Mul, LlvmType::Double) => "fmul",
+        (BinaryOp::Div, LlvmType::Double) => "fdiv",
+        (BinaryOp::Rem, LlvmType::Double) => "frem",
 
         _ => unreachable!(),
     }
@@ -219,34 +220,13 @@ fn escape_llvm(s: &str) -> String {
     }).collect()
 }
 
-#[derive(Debug, Clone, PartialEq)]
-enum LlvmType {
-    I64Unsigned,
-    I64Signed,
-    Double,
-    I1,
-    I8Ptr
-}
-
-impl LlvmType {
-    fn get_alloca_type(&self) -> &'static str {
-        match self {
-            LlvmType::I64Unsigned => "i64",
-            LlvmType::I64Signed => "i64",
-            LlvmType::Double => "double",
-            LlvmType::I1 => "i1",
-            LlvmType::I8Ptr => "i8*",
-        }
-    }
-}
-
-fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String, Type>) -> LlvmType {
+pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String, Type>) -> LlvmType {
     match arena.get(id) {
-        Expr::Unt(_) => LlvmType::I64Unsigned,
-        Expr::Int(_) => LlvmType::I64Signed,
-        Expr::Float(_) => LlvmType::Double,
-        Expr::Bool(_) => LlvmType::I1,
-        Expr::Str(_) => LlvmType::I8Ptr,
+        Expr::Lit(Lit::Unt(_)) => LlvmType::I64Unsigned,
+        Expr::Lit(Lit::Int(_)) => LlvmType::I64Signed,
+        Expr::Lit(Lit::Float(_)) => LlvmType::Double,
+        Expr::Lit(Lit::Bool(_)) => LlvmType::I1,
+        Expr::Lit(Lit::Str(_)) => LlvmType::I8Ptr,
 
         Expr::Var(name) => {
             match var_types.get(name).unwrap() {
@@ -261,72 +241,3 @@ fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String, Ty
         Expr::Binary { left, ..} => infer_llvm_type(arena, *left, var_types),
     }
 }
-
-struct FuncCtx {
-    str_consts: Vec<String>,
-    num_fmts: Vec<String>,
-    var_types: HashMap<String, Type>,
-}
-
-impl FuncCtx {
-    fn build(func: &FuncDef, arena: &ExprArena) -> FuncCtx {
-        let mut str_consts: Vec<String> = Vec::new();
-        let mut num_fmts = Vec::new();
-        let mut var_types = HashMap::new();
-
-        for stmt in &func.body {
-            match stmt {
-                Stmt::VarDecl(v) => {
-                    var_types.insert(v.name.clone(), v._type.clone());
-
-                    if let Expr::Str(s) = arena.get(v.value) {
-                         str_consts.push(s.clone());
-                    }
-                }
-                Stmt::Println(id) => {
-                    if let Expr::Str(s) = arena.get(*id) {
-                        str_consts.push(s.clone());
-                    }
-                }
-            }
-        }
-
-        for stmt in &func.body {
-            if let Stmt::Println(expr_id) = stmt {
-                let _type = infer_llvm_type(arena, *expr_id, &var_types);
-
-                let fmt = match _type {
-                    LlvmType::I64Unsigned => Some("%llu\n"),
-                    LlvmType::I64Signed => Some("%lld\n"),
-                    LlvmType::Double => Some("%g\n"),
-                    _ => None,
-                };
-
-                if let Some(f) = fmt {
-                    num_fmts.push(f.to_string());
-                }
-            }
-        }
-
-        FuncCtx { str_consts, num_fmts, var_types }
-    }
-}
-
-struct EmitState {
-    reg: usize,
-    str_idx: usize,
-    fmt_idx: usize,
-}
-
-impl EmitState {
-    fn new() -> EmitState {
-        EmitState { reg: 0, str_idx: 0, fmt_idx: 0 }
-    }
-
-    fn next_reg(&mut self) -> usize {
-        let r = self.reg;
-        self.reg += 1;
-        r
-    }
-}
-

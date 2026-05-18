@@ -146,8 +146,8 @@ impl Parser {
                     let right = self.parse_term();
 
                     expr = self.expr_arena.add(Expr::Binary {
+                        op: BinaryOp::Plus,
                         left: expr,
-                        op: Operand::Plus,
                         right,
                     });
                 }
@@ -157,8 +157,8 @@ impl Parser {
                     let right = self.parse_term();
 
                     expr = self.expr_arena.add(Expr::Binary {
+                        op: BinaryOp::Minus,
                         left: expr,
-                        op: Operand::Minus,
                         right,
                     });
                 }
@@ -180,8 +180,8 @@ impl Parser {
                     let right = self.parse_factor();
 
                     expr = self.expr_arena.add(Expr::Binary {
+                        op: BinaryOp::Mul,
                         left: expr,
-                        op: Operand::Mul,
                         right,
                     });
                 }
@@ -191,8 +191,8 @@ impl Parser {
                     let right = self.parse_factor();
 
                     expr = self.expr_arena.add(Expr::Binary {
+                        op: BinaryOp::Div,
                         left: expr,
-                        op: Operand::Div,
                         right,
                     });
                 }
@@ -202,8 +202,8 @@ impl Parser {
                     let right = self.parse_factor();
 
                     expr = self.expr_arena.add(Expr::Binary {
+                        op: BinaryOp::Rem,
                         left: expr,
-                        op: Operand::Rem,
                         right,
                     });
                 }
@@ -217,20 +217,20 @@ impl Parser {
 
     fn parse_factor(&mut self) -> ExprId {
         match self.advance() {
-            Token::UntLit(u) => self.expr_arena.add(Expr::Unt(u)),
+            Token::UntLit(u) => self.expr_arena.add(Expr::Lit(Lit::Unt(u))),
 
-            Token::FloatLit(f) => self.expr_arena.add(Expr::Float(f)),
+            Token::FloatLit(f) => self.expr_arena.add(Expr::Lit(Lit::Float(f))),
 
-            Token::BoolLit(b) => self.expr_arena.add(Expr::Bool(b)),
+            Token::BoolLit(b) => self.expr_arena.add(Expr::Lit(Lit::Bool(b))),
 
-            Token::StringLit(s) => self.expr_arena.add(Expr::Str(s)),
+            Token::StringLit(s) => self.expr_arena.add(Expr::Lit(Lit::Str(s))),
 
             Token::Ident(name) => self.expr_arena.add(Expr::Var(name)),
 
             Token::Minus => {
                 match self.advance() {
-                    Token::UntLit(n) => self.expr_arena.add(Expr::Int(-(n as i64))),
-                    Token::FloatLit(f) => self.expr_arena.add(Expr::Float(-f)),
+                    Token::UntLit(n) => self.expr_arena.add(Expr::Lit(Lit::Int(-(n as i64)))),
+                    Token::FloatLit(f) => self.expr_arena.add(Expr::Lit(Lit::Float(-f))),
 
                     other => generate_error!("Expected digits after `-`, got: `{}`", other),
                 }
