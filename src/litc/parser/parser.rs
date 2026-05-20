@@ -2,6 +2,8 @@ use std::process;
 
 use crate::ast::*;
 use crate::lexer::Token;
+use crate::lexer::TokenKind;
+use crate::lexer::Span;
 use crate::generate_error;
 
 pub struct Parser {
@@ -34,11 +36,11 @@ impl Parser {
     }
 
     fn is_eof(&self) -> bool {
-        self.peek() == &Token::Eof
+        self.peek().kind.is_eof()
     }
 
-    fn expect(&mut self, expected: Token) {
-        let got = self.advance();
+    fn expect(&mut self, expected: TokenKind) {
+        let got = self.advance().kind;
 
         if got != expected {
             generate_error!("Parse error: expected `{}`, but got `{}`", expected, got);
@@ -59,80 +61,80 @@ impl Parser {
     }
 
     fn parse_func(&mut self) -> FuncDef {
-        self.expect(Token::Fun);
+        self.expect(TokenKind::Fun);
 
-        let name = match self.advance() {
-            Token::Ident(n) => n,
+        let name = match self.advance().kind {
+            TokenKind::Ident(n) => n,
 
             other => generate_error!("Expected function name after `fun`, but got `{}`", other),
         };
 
-        self.expect(Token::LParen);
-        self.expect(Token::RParen);
-        self.expect(Token::LBrace);
+        self.expect(TokenKind::LParen);
+        self.expect(TokenKind::RParen);
+        self.expect(TokenKind::LBrace);
 
         let mut body = Vec::new();
 
-        while self.peek() != &Token::RBrace && !self.is_eof() {
+        while self.peek().kind != TokenKind::RBrace && !self.is_eof() {
             body.push(self.parse_stmt());
         }
 
-        self.expect(Token::RBrace);
+        self.expect(TokenKind::RBrace);
 
         FuncDef { name, body }
     }
 
     fn parse_stmt(&mut self) -> Stmt {
-        let stmt = match self.peek() {
-            Token::Unt | Token::Int | Token::Float | Token::Bool | Token::Str => {
+        let stmt = match self.peek().clone().kind {
+            t if t.is_primitive_type() => {
                 Stmt::VarDecl(self.parse_vardecl())
             }
 
-            Token::Ident(name) if name == "println" => {
+            TokenKind::Ident(name) if name == "println" => {
                 Stmt::Println(self.parse_println())
             },
 
             other => generate_error!("Parse error: unknown statement starting with `{}`", other),
         };
 
-        self.expect(Token::Semicolon);
+        self.expect(TokenKind::Semicolon);
 
         stmt
     }
 
     fn parse_println(&mut self) -> ExprId {
         self.scroll();
-        self.expect(Token::LParen);
+        self.expect(TokenKind::LParen);
 
         let arg = self.parse_expr();
 
-        self.expect(Token::RParen);
+        self.expect(TokenKind::RParen);
 
         arg
     }
 
     fn parse_vardecl(&mut self) -> VarDecl {
-        let _type = match self.advance() {
-            Token::Unt => Type::Unt,
-            Token::Int => Type::Int,
-            Token::Float => Type::Float,
-            Token::Bool => Type::Bool,
-            Token::Str => Type::Str,
+        let _type = match self.advance().kind {
+            TokenKind::Unt => Type::Unt,
+            TokenKind::Int => Type::Int,
+            TokenKind::Float => Type::Float,
+            TokenKind::Bool => Type::Bool,
+            TokenKind::Str => Type::Str,
 
             other => generate_error!("Unknown type: `{}`", other),
         };
 
-        let name = match self.advance() {
-            Token::Ident(name) => name,
+        let name = match self.advance().kind {
+            TokenKind::Ident(name) => name,
 
             other => generate_error!("Expected variable name after type, but got `{}`", other),
         };
 
-        self.expect(Token::Equal);
+        self.expect(TokenKind::Equal);
 
-        let value = self.parse_expr();
+        let expr_id = self.parse_expr();
 
-        VarDecl { _type, name, value }
+        VarDecl { _type, name, expr_id }
     }
 
 
@@ -140,27 +142,40 @@ impl Parser {
         let mut expr = self.parse_term();
 
         loop {
-            match self.peek() {
-                Token::Plus => {
+            match self.peek().kind {
+                TokenKind::Plus => {
                     self.scroll();
+
                     let right = self.parse_term();
 
-                    expr = self.expr_arena.add(Expr::Binary {
-                        op: BinaryOp::Plus,
-                        left: expr,
-                        right,
-                    });
+                    let start = self.expr_arena.get(expr).span.start;
+                    let end = self.expr_arena.get(right).span.end;
+
+                    expr = self.expr_arena.add(ExprNode::new(
+                        Expr::Binary {
+                            op: BinaryOp::Plus,
+                            left: expr,
+                            right,
+                        },
+                        Span::new(start, end),
+                    ));
                 }
 
-                Token::Minus => {
+                TokenKind::Minus => {
                     self.scroll();
                     let right = self.parse_term();
 
-                    expr = self.expr_arena.add(Expr::Binary {
-                        op: BinaryOp::Minus,
-                        left: expr,
-                        right,
-                    });
+                    let start = self.expr_arena.get(expr).span.start;
+                    let end = self.expr_arena.get(right).span.end;
+
+                    expr = self.expr_arena.add(ExprNode::new(
+                        Expr::Binary {
+                            op: BinaryOp::Minus,
+                            left: expr,
+                            right,
+                        },
+                        Span::new(start, end),
+                    ));
                 }
 
                 _ => break,
@@ -174,38 +189,57 @@ impl Parser {
         let mut expr = self.parse_factor();
 
         loop {
-            match self.peek() {
-                Token::Mul => {
+            match self.peek().kind {
+                TokenKind::Mul => {
                     self.scroll();
                     let right = self.parse_factor();
 
-                    expr = self.expr_arena.add(Expr::Binary {
-                        op: BinaryOp::Mul,
-                        left: expr,
-                        right,
-                    });
+                    let start = self.expr_arena.get(expr).span.start;
+                    let end = self.expr_arena.get(right).span.end;
+
+                    expr = self.expr_arena.add(ExprNode::new(
+                        Expr::Binary {
+                            op: BinaryOp::Mul,
+                            left: expr,
+                            right,
+                        },
+                        Span::new(start, end),
+                    ));
                 }
 
-                Token::Div => {
+                TokenKind::Div => {
                     self.scroll();
                     let right = self.parse_factor();
 
-                    expr = self.expr_arena.add(Expr::Binary {
-                        op: BinaryOp::Div,
-                        left: expr,
-                        right,
-                    });
+                    let start = self.expr_arena.get(expr).span.start;
+                    let end = self.expr_arena.get(right).span.end;
+
+                    expr = self.expr_arena.add(ExprNode::new(
+                        Expr::Binary {
+                            op: BinaryOp::Div,
+                            left: expr,
+                            right,
+                        },
+                        Span::new(start, end),
+                    ));
                 }
 
-                Token::Rem => {
+                TokenKind::Rem => {
                     self.scroll();
                     let right = self.parse_factor();
 
-                    expr = self.expr_arena.add(Expr::Binary {
-                        op: BinaryOp::Rem,
-                        left: expr,
-                        right,
-                    });
+                    let start = self.expr_arena.get(expr).span.start;
+                    let end = self.expr_arena.get(right).span.end;
+
+
+                    expr = self.expr_arena.add(ExprNode::new(
+                        Expr::Binary {
+                            op: BinaryOp::Rem,
+                            left: expr,
+                            right,
+                        },
+                        Span::new(start, end),
+                    ));
                 }
 
                 _ => break,
@@ -216,35 +250,127 @@ impl Parser {
     }
 
     fn parse_factor(&mut self) -> ExprId {
-        match self.advance() {
-            Token::UntLit(u) => self.expr_arena.add(Expr::Lit(Lit::Unt(u))),
+        match self.peek().kind.clone() {
+            TokenKind::Minus => {
+                let start = self.peek().span.start;
 
-            Token::FloatLit(f) => self.expr_arena.add(Expr::Lit(Lit::Float(f))),
+                self.scroll();
 
-            Token::BoolLit(b) => self.expr_arena.add(Expr::Lit(Lit::Bool(b))),
+                match self.peek().kind {
+                    TokenKind::NumLit(n) => {
+                        let end = self.peek().span.end;
 
-            Token::StringLit(s) => self.expr_arena.add(Expr::Lit(Lit::Str(s))),
+                        self.scroll();
 
-            Token::Ident(name) => self.expr_arena.add(Expr::Var(name)),
+                        self.expr_arena.add(ExprNode::new(
+                            Expr::Lit(Lit::Int(-(n as i64))),
+                            Span::new(start, end),
+                        ))
+                    }
 
-            Token::Minus => {
-                match self.advance() {
-                    Token::UntLit(n) => self.expr_arena.add(Expr::Lit(Lit::Int(-(n as i64)))),
-                    Token::FloatLit(f) => self.expr_arena.add(Expr::Lit(Lit::Float(-f))),
+                    TokenKind::FloatLit(f) => {
+                        let end = self.peek().span.end;
 
-                    other => generate_error!("Expected digits after `-`, got: `{}`", other),
+                        self.scroll();
+
+                        self.expr_arena.add(ExprNode::new(
+                            Expr::Lit(Lit::Float(-f)),
+                            Span::new(start, end),
+                        ))
+                    }
+
+                    _ => {
+                        let expr = self.parse_primary();
+                        let end = self.expr_arena.get(expr).span.end;
+
+                        self.expr_arena.add(ExprNode::new(
+                            Expr::Unary {
+                                op: UnaryOp::Minus,
+                                expr,
+                            },
+                            Span::new(start, end),
+                        ))
+                    }
                 }
             }
 
-            Token::LParen => {
-                let expr_id = self.parse_expr();
+            _ => self.parse_primary(),
+        }
+    }
 
-                if self.advance() != Token::RParen {
-                    generate_error!("Expected `)` to close left paren in expression")
+    fn parse_primary(&mut self) -> ExprId {
+        match self.peek().kind.clone() {
+            TokenKind::NumLit(n) => {
+                let start = self.peek().span.start;
+                let end = self.peek().span.end;
+
+                self.scroll();
+
+                self.expr_arena.add(ExprNode::new(
+                    Expr::Lit(Lit::Unt(n)),
+                    Span::new(start, end),
+                ))
+            }
+
+            TokenKind::FloatLit(f) => {
+                let start = self.peek().span.start;
+                let end = self.peek().span.end;
+
+                self.scroll();
+
+                self.expr_arena.add(ExprNode::new(
+                    Expr::Lit(Lit::Float(f)),
+                    Span::new(start, end),
+                ))
+            }
+
+            TokenKind::BoolLit(b) => {
+                let start = self.peek().span.start;
+                let end = self.peek().span.end;
+
+                self.scroll();
+
+                self.expr_arena.add(ExprNode::new(
+                    Expr::Lit(Lit::Bool(b)),
+                    Span::new(start, end),
+                ))
+            }
+
+            TokenKind::StringLit(s) => {
+                let start = self.peek().span.start;
+                let end = self.peek().span.end;
+
+                self.scroll();
+
+                self.expr_arena.add(ExprNode::new(
+                    Expr::Lit(Lit::Str(s)),
+                    Span::new(start, end),
+                ))
+            }
+
+            TokenKind::Ident(name) => {
+                let span = self.peek().span.clone();
+
+                self.scroll();
+
+                self.expr_arena.add(ExprNode::new(
+                    Expr::Var(name),
+                    span,
+                ))
+            }
+
+            TokenKind::LParen => {
+                self.scroll();
+
+                let expr = self.parse_expr();
+
+                match self.peek().kind {
+                    TokenKind::RParen => self.scroll(),
+                    _ => generate_error!("Expected `)` to close left paren in expression")
                 }
 
-                expr_id
-            },
+                expr
+            }
 
             other => generate_error!("Invalid expression: `{}`", other),
         }

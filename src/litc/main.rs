@@ -11,6 +11,7 @@ use std::env;
 use std::fs;
 use std::process;
 
+#[allow(unused_imports)] use ast::*;
 use lexer::Lexer;
 use parser::Parser;
 use analyzer::analyze;
@@ -127,6 +128,7 @@ fn main() {
     let now = Instant::now();
     let tokens = Lexer::new(&src).tokenize();
     let program = Parser::new(tokens).parse();
+    //print_ast(&program);
     analyze(&program);
 
     if options.check_only {
@@ -151,19 +153,27 @@ fn main() {
 
 /*fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
     let padding = " ".repeat(indent);
+    let expr_node = expr_arena.get(expr_id);
 
-    match expr_arena.get(expr_id) {
-        Expr::Unt(u) => println!("{}Unt({}),", padding, u),
-        Expr::Int(i) => println!("{}Int({}),", padding, i),
-        Expr::Float(f) => println!("{}Float({}),", padding, f),
-        Expr::Bool(b) => println!("{}Bool({}),", padding, b),
-        Expr::Str(s) => println!("{}Str(\"{}\"),", padding, s),
+    use Lit::*;
+    match &expr_node.expr {
+        Expr::Lit(Unt(u)) => println!("{}Unt({}),", padding, u),
+        Expr::Lit(Int(i)) => println!("{}Int({}),", padding, i),
+        Expr::Lit(Float(f)) => println!("{}Float({}),", padding, f),
+        Expr::Lit(Bool(b)) => println!("{}Bool({}),", padding, b),
+        Expr::Lit(Str(s)) => println!("{}Str(\"{}\"),", padding, s),
         Expr::Var(name) => println!("{}${},", padding, name),
         Expr::Binary { left, op, right } => {
             println!("{}Binary {{", padding);
             print_expr(expr_arena, *left, indent + 2);
             println!("{}  {},", padding, op);
             print_expr(expr_arena, *right, indent + 2);
+            println!("{}}}", padding);
+        }
+        Expr::Unary { op, expr } => {
+            println!("{}Unary {{", padding);
+            println!("{}  {},", padding, op);
+            print_expr(expr_arena, *expr, indent + 2);
             println!("{}}}", padding);
         }
     }
@@ -178,7 +188,7 @@ fn print_ast(program: &Program) {
                 Stmt::VarDecl(v) => {
                     let ty = format!("{:?}", v._type).to_lowercase();
                     print!("    VarDecl:  {} {} = ", ty, v.name);
-                    print_expr(&program.expr_arena, v.value, 0);
+                    print_expr(&program.expr_arena, v.expr_id, 0);
                 }
                 Stmt::Println(arg) => {
                     print!("    Println:  ");

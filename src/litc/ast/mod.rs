@@ -8,6 +8,7 @@ mod bin_op;
 mod ty;
 mod lit;
 mod un_op;
+mod expr_node;
 
 pub use program::Program;
 pub use func_def::FuncDef;
@@ -15,7 +16,9 @@ pub use expr_arena::ExprArena;
 pub use expr_arena::ExprId;
 pub use stmt::Stmt;
 pub use var_decl::VarDecl;
+pub use expr_node::ExprNode;
 pub use expr::Expr;
 pub use bin_op::BinaryOp;
+pub use un_op::UnaryOp;
 pub use ty::Type;
 pub use lit::Lit;

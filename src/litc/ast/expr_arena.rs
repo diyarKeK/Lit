@@ -1,10 +1,10 @@
-use super::expr::Expr;
+use super::expr_node::ExprNode;
 
 pub type ExprId = usize;
 
 #[derive(Debug)]
 pub struct ExprArena {
-    nodes: Vec<Expr>,
+    nodes: Vec<ExprNode>,
 }
 
 impl ExprArena {
@@ -14,15 +14,15 @@ impl ExprArena {
         }
     }
 
-    pub fn add(&mut self, expr: Expr) -> ExprId {
+    pub fn add(&mut self, node: ExprNode) -> ExprId {
         let id = self.nodes.len();
 
-        self.nodes.push(expr);
+        self.nodes.push(node);
 
         id
     }
 
-    pub fn get(&self, id: ExprId) -> &Expr {
+    pub fn get(&self, id: ExprId) -> &ExprNode {
         &self.nodes.get(id).unwrap()
     }
 }

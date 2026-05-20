@@ -5,5 +5,5 @@ use super::ty::Type;
 pub struct VarDecl {
     pub _type: Type,
     pub name: String,
-    pub value: ExprId,
+    pub expr_id: ExprId,
 }

@@ -9,5 +9,5 @@ pub enum Expr {
     Var(String),
     
     Binary { op: BinaryOp, left: ExprId, right: ExprId },
-    //Unary { op: UnaryOp, var: ExprId },
+    Unary { op: UnaryOp, expr: ExprId },
 }

@@ -16,14 +16,15 @@ pub fn analyze(program: &Program) {
                         generate_error!("Variable `{}` is already declared", v.name);
                     }
 
-                    let expr_type = infer_type(&program.expr_arena, v.value, &declared);
+
+                    let expr_type = infer_type(&program.expr_arena, v.expr_id, &declared);
                     check_compat(&v._type, &expr_type, &v.name);
 
                     declared.insert(v.name.clone(), v._type.clone());
                 }
 
                 Stmt::Println(expr) => {
-                    check_vars_declared(&program.expr_arena, *expr, &declared);
+                    infer_type(&program.expr_arena, *expr, &declared);
                 }
             }
         }
@@ -35,7 +36,10 @@ fn infer_type(
     id: ExprId,
     declared: &HashMap<String, Type>
 ) -> TypeSource {
-    match arena.get(id) {
+    let expr_node = arena.get(id);
+    let expr = &expr_node.expr;
+    
+    match expr {
         Expr::Lit(Lit::Unt(_)) => TypeSource::Lit(Type::Unt),
         Expr::Lit(Lit::Int(_)) => TypeSource::Lit(Type::Int),
         Expr::Lit(Lit::Float(_)) => TypeSource::Lit(Type::Float),
@@ -59,6 +63,36 @@ fn infer_type(
             resolved.unwrap_or_else(|| {
                 generate_error!("Cannot apply operator `{}` for types: `{}` and `{}`", op, left.get_type(), right.get_type());
             })
+        }
+        
+        Expr::Unary { op, expr } => {
+            let expr_type = infer_type(arena, *expr, declared);
+            
+            let resolved = resolve_unary_type(&expr_type);
+            
+            resolved.unwrap_or_else(|| {
+                generate_error!("Cannot apply unary operator `{}` for type: `{}`", op, expr_type.get_type());
+            })
+        }
+    }
+}
+
+fn resolve_unary_type(expr: &TypeSource) -> Option<TypeSource> {
+    match expr {
+        TypeSource::Var(a) => {
+            if is_num_type(a) {
+                Some(TypeSource::Var(a.clone()))
+            } else {
+                None
+            }
+        }
+        
+        TypeSource::Lit(a) => {
+            if is_num_type(a) {
+                Some(TypeSource::Lit(a.clone()))
+            } else {
+                None
+            }
         }
     }
 }
@@ -90,7 +124,7 @@ fn resolve_binary_type(left: &TypeSource, right: &TypeSource) -> Option<TypeSour
 }
 
 fn is_num_type(a: &Type) -> bool {
-    !matches!(a, Type::Bool | Type::Str)
+    matches!(a, Type::Unt | Type::Int | Type::Float)
 }
 
 fn does_literal_num_fits_in(lit: &Type, var: &Type) -> bool {
@@ -143,26 +177,5 @@ fn check_compat(
             "Cannot assign {} value to variable `{}` of type `{}`",
             expr_ts.get_type(), var_name, var_type
         )
-    }
-}
-
-fn check_vars_declared(
-    arena: &ExprArena,
-    expr_id: ExprId,
-    declared: &HashMap<String, Type>
-) {
-    match arena.get(expr_id) {
-        Expr::Var(name) => {
-            if !declared.contains_key(name) {
-                generate_error!("Variable `{}` is not declared", name)
-            }
-        }
-
-        Expr::Binary { op: _, left, right} => {
-            check_vars_declared(arena, *left, declared);
-            check_vars_declared(arena, *right, declared);
-        }
-
-        _ => {}
     }
 }

@@ -1,7 +1,22 @@
+use super::Span;
+
 use std::fmt;
 
+#[derive(Debug, Clone)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub span: Span,
+}
+
+impl Token {
+    #[inline]
+    pub fn new(kind: TokenKind, span: Span) -> Token {
+        Token { kind, span }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token {
+pub enum TokenKind {
     Fun,
 
     Unt,
@@ -12,7 +27,7 @@ pub enum Token {
 
     Ident(String),
     StringLit(String),
-    UntLit(u64),
+    NumLit(u64),
     FloatLit(f64),
     BoolLit(bool),
 
@@ -40,38 +55,58 @@ pub enum Token {
     Eof,
 }
 
-impl fmt::Display for Token {
+impl TokenKind {
+    pub fn is_primitive_type(&self) -> bool {
+        match self {
+            TokenKind::Unt |
+            TokenKind::Int |
+            TokenKind::Float |
+            TokenKind::Bool |
+            TokenKind::Str => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_eof(&self) -> bool {
+        match self {
+            TokenKind::Eof => true,
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Token::Fun => write!(f, "fun"),
-            Token::Unt => write!(f, "unt"),
-            Token::Int => write!(f, "int"),
-            Token::Float => write!(f, "float"),
-            Token::Bool => write!(f, "bool"),
-            Token::Str => write!(f, "str"),
-            Token::Ident(name) => write!(f, "{}", name),
-            Token::StringLit(s) => write!(f, "\"{}\"", s),
-            Token::UntLit(n) => write!(f, "{}", n),
-            Token::FloatLit(n) => write!(f, "{}", n),
-            Token::BoolLit(b) => write!(f, "{}", b),
-            Token::Equal => write!(f, "="),
-            Token::Plus => write!(f, "+"),
-            Token::Minus => write!(f, "-"),
-            Token::Mul => write!(f, "*"),
-            Token::Div => write!(f, "/"),
-            Token::Rem => write!(f, "%"),
-            Token::And => write!(f, "&"),
-            Token::Or => write!(f, "|"),
-            Token::Xor => write!(f, "^"),
-            Token::Bang => write!(f, "!"),
-            Token::Gt => write!(f, ">"),
-            Token::Lt => write!(f, "<"),
-            Token::LParen => write!(f, "("),
-            Token::RParen => write!(f, ")"),
-            Token::LBrace => write!(f, "{{"),
-            Token::RBrace => write!(f, "}}"),
-            Token::Semicolon => write!(f, ";"),
-            Token::Eof => write!(f, "`End_Of_File`"),
+            TokenKind::Fun => write!(f, "fun"),
+            TokenKind::Unt => write!(f, "unt"),
+            TokenKind::Int => write!(f, "int"),
+            TokenKind::Float => write!(f, "float"),
+            TokenKind::Bool => write!(f, "bool"),
+            TokenKind::Str => write!(f, "str"),
+            TokenKind::Ident(name) => write!(f, "{}", name),
+            TokenKind::StringLit(s) => write!(f, "\"{}\"", s),
+            TokenKind::NumLit(n) => write!(f, "{}", n),
+            TokenKind::FloatLit(n) => write!(f, "{}", n),
+            TokenKind::BoolLit(b) => write!(f, "{}", b),
+            TokenKind::Equal => write!(f, "="),
+            TokenKind::Plus => write!(f, "+"),
+            TokenKind::Minus => write!(f, "-"),
+            TokenKind::Mul => write!(f, "*"),
+            TokenKind::Div => write!(f, "/"),
+            TokenKind::Rem => write!(f, "%"),
+            TokenKind::And => write!(f, "&"),
+            TokenKind::Or => write!(f, "|"),
+            TokenKind::Xor => write!(f, "^"),
+            TokenKind::Bang => write!(f, "!"),
+            TokenKind::Gt => write!(f, ">"),
+            TokenKind::Lt => write!(f, "<"),
+            TokenKind::LParen => write!(f, "("),
+            TokenKind::RParen => write!(f, ")"),
+            TokenKind::LBrace => write!(f, "{{"),
+            TokenKind::RBrace => write!(f, "}}"),
+            TokenKind::Semicolon => write!(f, ";"),
+            TokenKind::Eof => write!(f, "`End_Of_File`"),
         }
     }
 }

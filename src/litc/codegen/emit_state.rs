@@ -5,6 +5,7 @@ pub struct EmitState {
 }
 
 impl EmitState {
+    #[inline]
     pub fn new() -> EmitState {
         EmitState { reg: 0, str_idx: 0, fmt_idx: 0 }
     }

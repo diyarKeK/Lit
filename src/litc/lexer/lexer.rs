@@ -1,7 +1,9 @@
 use crate::generate_error;
 use super::token::Token;
+use super::token::TokenKind;
 
 use std::process;
+use crate::lexer::Span;
 
 pub struct Lexer {
     chars: Vec<char>,
@@ -52,7 +54,7 @@ impl Lexer {
 
         loop {
             let token = self.next_token();
-            let is_eof = token == Token::Eof;
+            let is_eof = token.kind.is_eof();
 
             tokens.push(token);
 
@@ -64,26 +66,28 @@ impl Lexer {
 
     fn next_token(&mut self) -> Token {
         self.skip_whitespace();
+        
+        let start = self.pos;
 
         let kind = match self.advance() {
-            None => Token::Eof,
-            Some('(') => Token::LParen,
-            Some(')') => Token::RParen,
-            Some('{') => Token::LBrace,
-            Some('}') => Token::RBrace,
-            Some(';') => Token::Semicolon,
-            Some('=') => Token::Equal,
-            Some('+') => Token::Plus,
-            Some('-') => Token::Minus,
-            Some('*') => Token::Mul,
-            Some('/') => Token::Div,
-            Some('%') => Token::Rem,
-            Some('&') => Token::And,
-            Some('|') => Token::Or,
-            Some('^') => Token::Xor,
-            Some('!') => Token::Bang,
-            Some('>') => Token::Gt,
-            Some('<') => Token::Lt,
+            None => TokenKind::Eof,
+            Some('(') => TokenKind::LParen,
+            Some(')') => TokenKind::RParen,
+            Some('{') => TokenKind::LBrace,
+            Some('}') => TokenKind::RBrace,
+            Some(';') => TokenKind::Semicolon,
+            Some('=') => TokenKind::Equal,
+            Some('+') => TokenKind::Plus,
+            Some('-') => TokenKind::Minus,
+            Some('*') => TokenKind::Mul,
+            Some('/') => TokenKind::Div,
+            Some('%') => TokenKind::Rem,
+            Some('&') => TokenKind::And,
+            Some('|') => TokenKind::Or,
+            Some('^') => TokenKind::Xor,
+            Some('!') => TokenKind::Bang,
+            Some('>') => TokenKind::Gt,
+            Some('<') => TokenKind::Lt,
 
             Some(q @ '"') => {
                 let mut s = String::new();
@@ -115,7 +119,7 @@ impl Lexer {
                     s.push(c);
                     self.scroll();
                 }
-                Token::StringLit(s)
+                TokenKind::StringLit(s)
             }
 
             Some(c) if c.is_ascii_digit() => {
@@ -136,9 +140,9 @@ impl Lexer {
                 }
 
                 if is_float {
-                    Token::FloatLit(num.parse().unwrap())
+                    TokenKind::FloatLit(num.parse().unwrap())
                 } else {
-                    Token::UntLit(num.parse().unwrap())
+                    TokenKind::NumLit(num.parse().unwrap())
                 }
             }
 
@@ -154,22 +158,23 @@ impl Lexer {
                 }
 
                 match word.as_str() {
-                    "fun" => Token::Fun,
-                    "unt" => Token::Unt,
-                    "int" => Token::Int,
-                    "float" => Token::Float,
-                    "bool" => Token::Bool,
-                    "str" => Token::Str,
-                    "true" => Token::BoolLit(true),
-                    "false" => Token::BoolLit(false),
+                    "fun" => TokenKind::Fun,
+                    "unt" => TokenKind::Unt,
+                    "int" => TokenKind::Int,
+                    "float" => TokenKind::Float,
+                    "bool" => TokenKind::Bool,
+                    "str" => TokenKind::Str,
+                    "true" => TokenKind::BoolLit(true),
+                    "false" => TokenKind::BoolLit(false),
 
-                    _ => Token::Ident(word),
+                    _ => TokenKind::Ident(word),
                 }
             }
 
             Some(other) => generate_error!("Unrecognized character: `{}`", other),
         };
 
-        kind
+        let span = Span::new(start, self.pos);
+        Token::new(kind, span)
     }
 }

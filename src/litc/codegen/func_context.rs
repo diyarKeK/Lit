@@ -21,12 +21,12 @@ impl FuncCtx {
                 Stmt::VarDecl(v) => {
                     var_types.insert(v.name.clone(), v._type.clone());
 
-                    if let Expr::Lit(Lit::Str(s)) = arena.get(v.value) {
+                    if let Expr::Lit(Lit::Str(s)) = arena.get(v.expr_id).expr.clone() {
                         str_consts.push(s.clone());
                     }
                 }
                 Stmt::Println(id) => {
-                    if let Expr::Lit(Lit::Str(s)) = arena.get(*id) {
+                    if let Expr::Lit(Lit::Str(s)) = arena.get(*id).expr.clone() {
                         str_consts.push(s.clone());
                     }
                 }

@@ -66,12 +66,12 @@ fn emit_vardecl(
     ctx: &FuncCtx,
     state: &mut EmitState,
 ) {
-    let llvm_type = infer_llvm_type(arena, v.value, ctx.get_var_types());
+    let llvm_type = infer_llvm_type(arena, v.expr_id, ctx.get_var_types());
     let alloca_type = llvm_type.get_alloca_type();
 
     out.push_str(&format!("  %{name} = alloca {_type}\n", name = v.name, _type = alloca_type));
 
-    let val = emit_expr(out, arena, v.value, fn_name, ctx, state).0;
+    let val = emit_expr(out, arena, v.expr_id, fn_name, ctx, state).0;
 
     out.push_str(&format!(
         "  store {_type} {val}, {_type}* %{name}\n",
@@ -142,12 +142,16 @@ fn emit_expr(
     ctx: &FuncCtx,
     state: &mut EmitState
 ) -> (String, LlvmType) {
-    match arena.get(id) {
-        Expr::Lit(Lit::Unt(u)) => (format!("{}", *u as i64), LlvmType::I64Unsigned),
-        Expr::Lit(Lit::Int(i)) => (format!("{}", i), LlvmType::I64Signed),
-        Expr::Lit(Lit::Float(f)) => (format!("{:.6e}", f), LlvmType::Double),
-        Expr::Lit(Lit::Bool(b)) => (format!("{}", *b as i32), LlvmType::I1),
-        Expr::Lit(Lit::Str(s)) => {
+    let expr_node = arena.get(id);
+    let expr = &expr_node.expr;
+
+    use Lit::*;
+    match expr {
+        Expr::Lit(Unt(u)) => (format!("{}", *u as i64), LlvmType::I64Unsigned),
+        Expr::Lit(Int(i)) => (format!("{}", i), LlvmType::I64Signed),
+        Expr::Lit(Float(f)) => (format!("{:.6e}", f), LlvmType::Double),
+        Expr::Lit(Bool(b)) => (format!("{}", *b as i32), LlvmType::I1),
+        Expr::Lit(Str(s)) => {
             let b = s.len() + 1;
             let si = state.next_str_idx();
             let reg = state.next_reg();
@@ -185,6 +189,27 @@ fn emit_expr(
             ));
             (format!("%r{}", reg), l_type)
         }
+
+        Expr::Unary { op, expr } => {
+            let (value, _type) = emit_expr(out, arena, *expr, fn_name, ctx, state);
+
+            let instr = llvm_instr_for_unary_operator_by_type(op, &_type);
+            let llvm_type = _type.get_alloca_type();
+            let reg = state.next_reg();
+
+            let zero = match _type {
+                LlvmType::I64Unsigned | LlvmType::I64Signed => "0",
+                LlvmType::Double => "0.0",
+                _ => unreachable!(),
+            };
+
+            out.push_str(&format!(
+                "  %r{reg} = {instr} {_type} {zero}, {value}\n",
+                reg = reg, instr = instr, _type = llvm_type, zero = zero, value = value,
+            ));
+
+            (format!("%r{}", reg), _type)
+        }
     }
 }
 
@@ -209,6 +234,16 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
     }
 }
 
+fn llvm_instr_for_unary_operator_by_type(op: &UnaryOp, llvm_type: &LlvmType) -> &'static str {
+    match (op, llvm_type) {
+        (UnaryOp::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "sub",
+
+        (UnaryOp::Minus, LlvmType::Double) => "fsub",
+
+        _ => unreachable!(),
+    }
+}
+
 fn escape_llvm(s: &str) -> String {
     s.chars().flat_map(|c| {
         let b = c as u32;
@@ -221,7 +256,10 @@ fn escape_llvm(s: &str) -> String {
 }
 
 pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String, Type>) -> LlvmType {
-    match arena.get(id) {
+    let expr_node = arena.get(id);
+    let expr = &expr_node.expr;
+
+    match expr {
         Expr::Lit(Lit::Unt(_)) => LlvmType::I64Unsigned,
         Expr::Lit(Lit::Int(_)) => LlvmType::I64Signed,
         Expr::Lit(Lit::Float(_)) => LlvmType::Double,
@@ -239,5 +277,7 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
         }
 
         Expr::Binary { left, ..} => infer_llvm_type(arena, *left, var_types),
+
+        Expr::Unary { expr, .. } => infer_llvm_type(arena, *expr, var_types),
     }
 }
