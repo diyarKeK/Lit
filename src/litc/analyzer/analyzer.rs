@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::process;
 
-use super::TypeSource;
 use crate::ast::*;
 use crate::generate_error;
 
@@ -18,7 +16,7 @@ pub fn analyze(program: &Program) {
 
 
                     let expr_type = infer_type(&program.expr_arena, v.expr_id, &declared);
-                    check_compat(&v._type, &expr_type, &v.name);
+                    check_compat(&v._type, &expr_type, &v.name, has_variables(&program.expr_arena, v.expr_id));
 
                     declared.insert(v.name.clone(), v._type.clone());
                 }
@@ -31,102 +29,117 @@ pub fn analyze(program: &Program) {
     }
 }
 
+fn has_variables(arena: &ExprArena, id: ExprId) -> bool {
+    let expr_node = arena.get(id);
+    let expr = &expr_node.expr;
+
+    match expr {
+        Expr::Lit(_) => false,
+        Expr::Var(_) => true,
+        Expr::Binary { left, right, .. } => has_variables(arena, *left) || has_variables(arena, *right),
+        Expr::Unary { expr, .. } => has_variables(arena, *expr),
+    }
+}
+
 fn infer_type(
     arena: &ExprArena,
     id: ExprId,
-    declared: &HashMap<String, Type>
-) -> TypeSource {
+    declared: &HashMap<String, Type>,
+) -> Type {
     let expr_node = arena.get(id);
     let expr = &expr_node.expr;
     
     match expr {
-        Expr::Lit(Lit::Unt(_)) => TypeSource::Lit(Type::Unt),
-        Expr::Lit(Lit::Int(_)) => TypeSource::Lit(Type::Int),
-        Expr::Lit(Lit::Float(_)) => TypeSource::Lit(Type::Float),
-        Expr::Lit(Lit::Bool(_)) => TypeSource::Lit(Type::Bool),
-        Expr::Lit(Lit::Str(_)) => TypeSource::Lit(Type::Str),
+        Expr::Lit(Lit::Unt(_)) => Type::Unt,
+        Expr::Lit(Lit::Int(_)) => Type::Int,
+        Expr::Lit(Lit::Float(_)) => Type::Float,
+        Expr::Lit(Lit::Bool(_)) => Type::Bool,
+        Expr::Lit(Lit::Str(_)) => Type::Str,
 
         Expr::Var(name) => {
-            let _type = declared.get(name).unwrap_or_else(|| {
+            declared.get(name).unwrap_or_else(|| {
                 generate_error!("Variable `{}` is not declared", name);
-            }).clone();
-            
-            TypeSource::Var(_type)
+            }).clone()
         }
 
         Expr::Binary { op, left, right} => {
             let left = infer_type(arena, *left, declared);
             let right = infer_type(arena, *right, declared);
 
-            let resolved = resolve_binary_type(&left, &right);
+            let resolved = resolve_binary_type(op, &left, &right);
+
+            println!("Left: {}, Right: {}, New_type: {:?}", left, right, resolved);
 
             resolved.unwrap_or_else(|| {
-                generate_error!("Cannot apply operator `{}` for types: `{}` and `{}`", op, left.get_type(), right.get_type());
+                generate_error!("Cannot apply operator `{}` for types: `{}` and `{}`", op, left, right);
             })
         }
-        
+
         Expr::Unary { op, expr } => {
             let expr_type = infer_type(arena, *expr, declared);
             
             let resolved = resolve_unary_type(&expr_type);
-            
+
             resolved.unwrap_or_else(|| {
-                generate_error!("Cannot apply unary operator `{}` for type: `{}`", op, expr_type.get_type());
+                generate_error!("Cannot apply unary operator `{}` for type: `{}`", op, expr_type);
             })
         }
     }
 }
 
-fn resolve_unary_type(expr: &TypeSource) -> Option<TypeSource> {
-    match expr {
-        TypeSource::Var(a) => {
-            if is_num_type(a) {
-                Some(TypeSource::Var(a.clone()))
-            } else {
-                None
-            }
-        }
-        
-        TypeSource::Lit(a) => {
-            if is_num_type(a) {
-                Some(TypeSource::Lit(a.clone()))
-            } else {
-                None
-            }
-        }
+fn resolve_binary_type(op: &BinaryOp, left: &Type, right: &Type) -> Option<Type> {
+    match op {
+        op if op.is_comparison() => match_comparison(left, right),
+        op if op.is_arranging() => match_arranging(left, right),
+        op if op.is_logical() => match_logical(left, right),
+        op if op.is_arithmetic() => match_arithmetic(left, right),
+
+        _ => unreachable!(),
     }
 }
 
-fn resolve_binary_type(left: &TypeSource, right: &TypeSource) -> Option<TypeSource> {
+fn match_comparison(left: &Type, right: &Type) -> Option<Type> {
+    if left == right {
+        Some(Type::Bool)
+    } else {
+        None
+    }
+}
+
+fn match_arranging(left: &Type, right: &Type) -> Option<Type> {
+    if left.is_num_type() && right.is_num_type() && left == right {
+        Some(Type::Bool)
+    } else {
+        None
+    }
+}
+
+fn match_logical(left: &Type, right: &Type) -> Option<Type> {
     match (left, right) {
-        (TypeSource::Var(a), TypeSource::Var(b)) => {
-            if a == b && is_num_type(a) && is_num_type(b) {
-                Some(TypeSource::Var(a.clone()))
-            } else {
-                None
-            }
-        }
-
-        (TypeSource::Var(a), TypeSource::Lit(b)) |
-        (TypeSource::Lit(b), TypeSource::Var(a))
-            => {
-            if does_literal_num_fits_in(b, a) {
-                Some(TypeSource::Var(a.clone()))
-            } else {
-                None
-            }
-        }
-
-        (TypeSource::Lit(a), TypeSource::Lit(b)) => {
-            numeric_tower(a, b).map(TypeSource::Lit)
-        }
+        (Type::Bool, Type::Bool) => Some(Type::Bool),
+        _ => None
     }
 }
 
-fn is_num_type(a: &Type) -> bool {
-    matches!(a, Type::Unt | Type::Int | Type::Float)
+fn match_arithmetic(left: &Type, right: &Type) -> Option<Type> {
+    let expr_type = numeric_tower(left, right);
+
+    if expr_type.is_some() {
+        Some(expr_type.unwrap())
+    } else {
+        None
+    }
 }
 
+fn resolve_unary_type(expr: &Type) -> Option<Type> {
+    if expr.is_num_type() || *expr == Type::Bool {
+        Some(expr.clone())
+    } else {
+        None
+    }
+}
+
+#[allow(dead_code)]
 fn does_literal_num_fits_in(lit: &Type, var: &Type) -> bool {
     matches!(
         (var, lit),
@@ -158,24 +171,28 @@ fn numeric_tower(a: &Type, b: &Type) -> Option<Type> {
 
 fn check_compat(
     var_type: &Type,
-    expr_ts: &TypeSource,
-    var_name: &String
+    expr_type: &Type,
+    var_name: &String,
+    contains_var: bool,
 ) {
-    let ok = match (var_type, expr_ts) {
-        (a, TypeSource::Var(b)) if a == b => true,
-        (a, TypeSource::Lit(b)) if a == b => true,
+    let ok = if contains_var {
+        var_type == expr_type
+    } else {
+        match (var_type, expr_type) {
+            (a, b) if a == b => true,
 
-        (Type::Int, TypeSource::Lit(Type::Unt)) => true,
-        (Type::Float, TypeSource::Lit(Type::Unt)) => true,
-        (Type::Float, TypeSource::Lit(Type::Int)) => true,
+            (Type::Int, Type::Unt) => true,
+            (Type::Float, Type::Unt) => true,
+            (Type::Float, Type::Int) => true,
 
-        _ => false,
+            _ => false,
+        }
     };
 
     if !ok {
         generate_error!(
             "Cannot assign {} value to variable `{}` of type `{}`",
-            expr_ts.get_type(), var_name, var_type
+            expr_type, var_name, var_type
         )
     }
 }
