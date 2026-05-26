@@ -2,7 +2,6 @@ use crate::generate_error;
 use super::token::Token;
 use super::token::TokenKind;
 
-use std::process;
 use crate::lexer::Span;
 
 pub struct Lexer {
@@ -49,6 +48,15 @@ impl Lexer {
         }
     }
 
+    fn match_next(&mut self, next: char, yes: TokenKind, no: TokenKind) -> TokenKind {
+        if self.peek() == Some(next) {
+            self.scroll();
+            yes
+        } else {
+            no
+        }
+    }
+
     pub fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
 
@@ -76,18 +84,18 @@ impl Lexer {
             Some('{') => TokenKind::LBrace,
             Some('}') => TokenKind::RBrace,
             Some(';') => TokenKind::Semicolon,
-            Some('=') => TokenKind::Equal,
+            Some('=') => self.match_next('=', TokenKind::EqEq, TokenKind::Assign),
             Some('+') => TokenKind::Plus,
             Some('-') => TokenKind::Minus,
-            Some('*') => TokenKind::Mul,
-            Some('/') => TokenKind::Div,
-            Some('%') => TokenKind::Rem,
-            Some('&') => TokenKind::And,
-            Some('|') => TokenKind::Or,
-            Some('^') => TokenKind::Xor,
-            Some('!') => TokenKind::Bang,
-            Some('>') => TokenKind::Gt,
-            Some('<') => TokenKind::Lt,
+            Some('*') => TokenKind::Star,
+            Some('/') => TokenKind::Slash,
+            Some('%') => TokenKind::Percent,
+            Some('&') => self.match_next('&', TokenKind::AndAnd, TokenKind::And),
+            Some('|') => self.match_next('|', TokenKind::OrOr, TokenKind::Or),
+            Some('^') => self.match_next('^', TokenKind::XorXor, TokenKind::Caret),
+            Some('!') => self.match_next('=', TokenKind::NotEq, TokenKind::Bang),
+            Some('>') => self.match_next('=', TokenKind::GtEq, TokenKind::Gt),
+            Some('<') => self.match_next('=', TokenKind::LtEq, TokenKind::Lt),
 
             Some(q @ '"') => {
                 let mut s = String::new();
@@ -95,17 +103,7 @@ impl Lexer {
                 while let Some(c) = self.peek() {
                     if c == '\\' {
                         self.scroll();
-                        let unicode = match self.advance().unwrap() {
-                            'n' => '\n',
-                            'r' => '\r',
-                            't' => '\t',
-                            'c' => '\x1B',
-                            '"' => '"',
-                            '\\' => '\\',
-                            other => {
-                                generate_error!("Cannot resolve: `\\{}` unicode", other);
-                            },
-                        };
+                        let unicode = self.read_escape();
 
                         s.push(unicode);
                         continue;
@@ -176,5 +174,19 @@ impl Lexer {
 
         let span = Span::new(start, self.pos);
         Token::new(kind, span)
+    }
+
+    fn read_escape(&mut self) -> char {
+        match self.advance().unwrap() {
+            'n' => '\n',
+            'r' => '\r',
+            't' => '\t',
+            'c' => '\x1B',
+            '"' => '"',
+            '\\' => '\\',
+            other => {
+                generate_error!("Cannot resolve: `\\{}` unicode", other)
+            },
+        }
     }
 }
