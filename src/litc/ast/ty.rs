@@ -2,11 +2,23 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    Unt,
-    Int,
-    Float,
-    Bool,
-    Str,
+    Unt,      // unsigned 64-bit integer
+    Int,      // signed 64-bit integer
+    Float,    // 64-bit number with floating point
+    Bool,     // boolean
+    Str,      // string
+}
+
+impl Type {
+    pub fn is_num_type(&self) -> bool {
+        match self {
+            Type::Unt |
+            Type::Int |
+            Type::Float
+            => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Type {
