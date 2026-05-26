@@ -1,6 +1,7 @@
+use std::fmt;
+
 use super::Span;
 
-use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Token {
@@ -15,43 +16,67 @@ impl Token {
     }
 }
 
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?} : {}..{}", self.kind, self.span.start, self.span.end)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
-    Fun,
+    // Keywords
+    Fun,                // `fun`
 
-    Unt,
-    Int,
-    Float,
-    Bool,
-    Str,
+    Unt,                // `unt`
+    Int,                // `int`
+    Float,              // `float`
+    Bool,               // `bool`
+    Str,                // `str`
 
-    Ident(String),
+    // Identifier
+    Ident(String),      // identifier
+    
+    // Literals
     StringLit(String),
     NumLit(u64),
     FloatLit(f64),
     BoolLit(bool),
 
-    Equal,
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    Rem,
+    // Operators
+    Assign,             // `=`
+    Plus,               // `+`
+    Minus,              // `-`
+    Star,               // `*`
+    Slash,              // `/`
+    Percent,            // `%`
 
-    And,
-    Or,
-    Xor,
-    Bang,
+    // Logical
+    And,                // `&`
+    Or,                 // `|`
+    Caret,                // `^`
+    #[allow(dead_code)] Not,                // `~`
+    
+    AndAnd,             // `&&`
+    OrOr,               // `||`
+    XorXor,             // `^^`
+    Bang,               // `!`
+    
+    // Comparison
+    EqEq,               // `==`
+    NotEq,              // `!=`
+    Gt,                 // `>`
+    Lt,                 // `<`
+    GtEq,               // `>=`
+    LtEq,               // `<=`
 
-    Gt,
-    Lt,
+    // Symbols
+    LParen,             // `(`
+    RParen,             // `)`
+    LBrace,             // `{`
+    RBrace,             // `}`
+    Semicolon,          // `;`
 
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    Semicolon,
-
+    // End Of File
     Eof,
 }
 
@@ -89,18 +114,26 @@ impl fmt::Display for TokenKind {
             TokenKind::NumLit(n) => write!(f, "{}", n),
             TokenKind::FloatLit(n) => write!(f, "{}", n),
             TokenKind::BoolLit(b) => write!(f, "{}", b),
-            TokenKind::Equal => write!(f, "="),
+            TokenKind::Assign => write!(f, "="),
             TokenKind::Plus => write!(f, "+"),
             TokenKind::Minus => write!(f, "-"),
-            TokenKind::Mul => write!(f, "*"),
-            TokenKind::Div => write!(f, "/"),
-            TokenKind::Rem => write!(f, "%"),
+            TokenKind::Star => write!(f, "*"),
+            TokenKind::Slash => write!(f, "/"),
+            TokenKind::Percent => write!(f, "%"),
             TokenKind::And => write!(f, "&"),
             TokenKind::Or => write!(f, "|"),
-            TokenKind::Xor => write!(f, "^"),
+            TokenKind::Caret => write!(f, "^"),
+            TokenKind::Not => write!(f, "~"),
+            TokenKind::AndAnd => write!(f, "&&"),
+            TokenKind::OrOr => write!(f, "||"),
+            TokenKind::XorXor => write!(f, "^^"),
             TokenKind::Bang => write!(f, "!"),
+            TokenKind::EqEq => write!(f, "=="),
+            TokenKind::NotEq => write!(f, "!="),
             TokenKind::Gt => write!(f, ">"),
             TokenKind::Lt => write!(f, "<"),
+            TokenKind::GtEq => write!(f, ">="),
+            TokenKind::LtEq => write!(f, "<="),
             TokenKind::LParen => write!(f, "("),
             TokenKind::RParen => write!(f, ")"),
             TokenKind::LBrace => write!(f, "{{"),
