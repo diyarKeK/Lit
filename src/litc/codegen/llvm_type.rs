@@ -1,10 +1,10 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum LlvmType {
-    I64Unsigned,
-    I64Signed,
-    Double,
-    I1,
-    I8Ptr
+    I64Unsigned,    // i64
+    I64Signed,      // i64
+    Double,         // double
+    I1,             // i1
+    I8Ptr           // i8*
 }
 
 impl LlvmType {
