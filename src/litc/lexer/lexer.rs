@@ -90,6 +90,7 @@ impl Lexer {
             Some('*') => TokenKind::Star,
             Some('/') => TokenKind::Slash,
             Some('%') => TokenKind::Percent,
+            Some('~') => TokenKind::Not,
             Some('&') => self.match_next('&', TokenKind::AndAnd, TokenKind::And),
             Some('|') => self.match_next('|', TokenKind::OrOr, TokenKind::Or),
             Some('^') => self.match_next('^', TokenKind::XorXor, TokenKind::Caret),
