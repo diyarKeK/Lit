@@ -35,6 +35,8 @@ struct Options {
     output: PathBuf,
     mark_time: bool,
     check_only: bool,
+    print_ast: bool,
+    print_tokens: bool,
 }
 
 impl Options {
@@ -49,6 +51,8 @@ impl Options {
         let mut output: Option<PathBuf> = None;
         let mut mark_time = false;
         let mut check_only = false;
+        let mut print_ast = false;
+        let mut print_tokens = false;
 
         let mut i = 0;
         while i < args.len() {
@@ -69,6 +73,14 @@ impl Options {
 
                 "-S" | "--check" => {
                     check_only = true;
+                }
+
+                "-TOK" => {
+                    print_tokens = true;
+                }
+
+                "-AST" => {
+                    print_ast = true;
                 }
 
                 "-o" => {
@@ -101,7 +113,7 @@ impl Options {
 
         let output = output.unwrap_or_else(|| input.with_extension("ll"));
 
-        Options { input, output, mark_time, check_only }
+        Options { input, output, mark_time, check_only, print_ast, print_tokens }
     }
 
     fn version() {
@@ -127,8 +139,17 @@ fn main() {
 
     let now = Instant::now();
     let tokens = Lexer::new(&src).tokenize();
+
+    if options.print_tokens {
+        tokens.iter().for_each(|t| println!("{}", t));
+    }
+
     let program = Parser::new(tokens).parse();
-    //print_ast(&program);
+
+    if options.print_ast {
+        print_ast(&program);
+    }
+
     analyze(&program);
 
     if options.check_only {
@@ -151,7 +172,7 @@ fn main() {
     });
 }
 
-/*fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
+fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
     let padding = " ".repeat(indent);
     let expr_node = expr_arena.get(expr_id);
 
@@ -163,7 +184,7 @@ fn main() {
         Expr::Lit(Bool(b)) => println!("{}Bool({}),", padding, b),
         Expr::Lit(Str(s)) => println!("{}Str(\"{}\"),", padding, s),
         Expr::Var(name) => println!("{}${},", padding, name),
-        Expr::Binary { left, op, right } => {
+        Expr::Binary { op, left, right } => {
             println!("{}Binary {{", padding);
             print_expr(expr_arena, *left, indent + 2);
             println!("{}  {},", padding, op);
@@ -197,4 +218,4 @@ fn print_ast(program: &Program) {
             }
         }
     }
-}*/
+}
