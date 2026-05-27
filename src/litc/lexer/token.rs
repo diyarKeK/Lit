@@ -54,7 +54,7 @@ pub enum TokenKind {
     And,                // `&`
     Or,                 // `|`
     Caret,                // `^`
-    #[allow(dead_code)] Not,                // `~`
+    Not,                // `~`
     
     AndAnd,             // `&&`
     OrOr,               // `||`
