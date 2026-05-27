@@ -215,20 +215,20 @@ fn emit_expr(
 
 fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'static str {
     match (op, llvm_type) {
-        (BinaryOp::Plus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "add",
-        (BinaryOp::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "sub",
+        (BinaryOp::Add, LlvmType::I64Unsigned | LlvmType::I64Signed) => "add",
+        (BinaryOp::Sub, LlvmType::I64Unsigned | LlvmType::I64Signed) => "sub",
         (BinaryOp::Mul, LlvmType::I64Unsigned | LlvmType::I64Signed) => "mul",
 
         (BinaryOp::Div, LlvmType::I64Unsigned) => "udiv",
         (BinaryOp::Div, LlvmType::I64Signed) => "sdiv",
-        (BinaryOp::Rem, LlvmType::I64Unsigned) => "urem",
-        (BinaryOp::Rem, LlvmType::I64Signed) => "srem",
+        (BinaryOp::Mod, LlvmType::I64Unsigned) => "urem",
+        (BinaryOp::Mod, LlvmType::I64Signed) => "srem",
 
-        (BinaryOp::Plus, LlvmType::Double) => "fadd",
-        (BinaryOp::Minus, LlvmType::Double) => "fsub",
+        (BinaryOp::Add, LlvmType::Double) => "fadd",
+        (BinaryOp::Sub, LlvmType::Double) => "fsub",
         (BinaryOp::Mul, LlvmType::Double) => "fmul",
         (BinaryOp::Div, LlvmType::Double) => "fdiv",
-        (BinaryOp::Rem, LlvmType::Double) => "frem",
+        (BinaryOp::Mod, LlvmType::Double) => "frem",
 
         _ => unreachable!(),
     }
