@@ -68,8 +68,6 @@ fn infer_type(
 
             let resolved = resolve_binary_type(op, &left, &right);
 
-            println!("Left: {}, Right: {}, New_type: {:?}", left, right, resolved);
-
             resolved.unwrap_or_else(|| {
                 generate_error!("Cannot apply operator `{}` for types: `{}` and `{}`", op, left, right);
             })
@@ -137,19 +135,6 @@ fn resolve_unary_type(expr: &Type) -> Option<Type> {
     } else {
         None
     }
-}
-
-#[allow(dead_code)]
-fn does_literal_num_fits_in(lit: &Type, var: &Type) -> bool {
-    matches!(
-        (var, lit),
-        (Type::Unt, Type::Unt) |
-        (Type::Int, Type::Unt) |
-        (Type::Int, Type::Int) |
-        (Type::Float, Type::Unt) |
-        (Type::Float, Type::Int) |
-        (Type::Float, Type::Float)
-    )
 }
 
 fn numeric_tower(a: &Type, b: &Type) -> Option<Type> {
