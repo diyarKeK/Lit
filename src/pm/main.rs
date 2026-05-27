@@ -1,4 +1,5 @@
 mod utils;
+mod toml;
 
 use std::env;
 use std::fs;
@@ -153,7 +154,7 @@ impl Options {
         let ll_path = &format!("out/ir/{}.ll", project_name);
         let exe_path = &format!("out/bin/{}.exe", project_name);
 
-        println!("[1/2] Compiling `{}`...", src_path);
+        println!("\x1b[1;32mCompiling\x1B[0m `{}`...", src_path);
         let litc = Command::new("litc")
             .args(litc_args)
             .args([src_path, "-o", ll_path])
@@ -162,7 +163,7 @@ impl Options {
 
         if !litc.success() { generate_error!(""); }
 
-        println!("[2/2] Linking `{}`...", ll_path);
+        println!("\x1b[1;32mLinking\x1b[0m   `{}`...", ll_path);
         let clang = Command::new("clang")
             .args([
                 "--target=x86_64-pc-windows-gnu",
@@ -176,10 +177,10 @@ impl Options {
 
         if !clang.success() { generate_error!("Clang compilation failed"); }
 
-        println!("\x1B[1;32m[Build success]\x1B[0m Done. Built in: `{}`;", exe_path);
+        println!("\x1B[1;32mDone.\x1B[0m      Built in: `{}`;", exe_path);
 
         if run_after {
-            println!("[run] Running `{}`...\n", exe_path);
+            println!("\x1b[1;32mRunning\x1b[0m   `{}`...\n", exe_path);
             let code = Command::new(format!("./{}", exe_path))
                 .status()
                 .unwrap()
