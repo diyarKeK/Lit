@@ -5,9 +5,9 @@ use super::lit::Lit;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Lit(Lit),
-    Var(String),
+    Lit(Lit), // literal
+    Var(String), // variable
     
-    Binary { op: BinaryOp, left: ExprId, right: ExprId },
-    Unary { op: UnaryOp, expr: ExprId },
+    Binary { op: BinaryOp, left: ExprId, right: ExprId }, // binary action, e.g. `2 + 2 * 2`
+    Unary { op: UnaryOp, expr: ExprId }, // unary action, e.g. `-a` where `a` is a variable
 }
