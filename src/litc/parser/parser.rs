@@ -282,7 +282,7 @@ impl Parser {
                 }
             }
             
-            TokenKind::Bang => {
+            TokenKind::Bang | TokenKind::Not => {
                 let start = self.peek().span.start;
                 
                 self.scroll();
