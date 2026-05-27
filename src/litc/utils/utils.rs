@@ -7,6 +7,6 @@ macro_rules! generate_error {
             "\x1B[1;31m[Error]:\x1B[0m {}",
             msg
         );
-        process::exit(1);
+        std::process::exit(1);
     }};
 }
