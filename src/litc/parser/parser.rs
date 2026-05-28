@@ -138,7 +138,7 @@ impl Parser {
     fn make_binary(&mut self, op: BinaryOp, left: ExprId, right: ExprId) -> ExprId {
         let start = self.expr_arena.get(left).span.start;
         let end = self.expr_arena.get(right).span.end;
-        
+
         self.expr_arena.add(
             ExprNode::new(
                 Expr::Binary { op, left, right },
