@@ -25,4 +25,8 @@ impl ExprArena {
     pub fn get(&self, id: ExprId) -> &ExprNode {
         &self.nodes.get(id).unwrap()
     }
+
+    pub fn set(&mut self, id: ExprId, node: ExprNode) {
+        self.nodes[id] = node;
+    }
 }
