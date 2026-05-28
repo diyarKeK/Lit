@@ -87,12 +87,22 @@ fn infer_type(
 
 fn resolve_binary_type(op: &BinaryOp, left: &Type, right: &Type) -> Option<Type> {
     match op {
+        op if op.is_arithmetic() => match_arithmetic(left, right),
         op if op.is_comparison() => match_comparison(left, right),
         op if op.is_arranging() => match_arranging(left, right),
         op if op.is_logical() => match_logical(left, right),
-        op if op.is_arithmetic() => match_arithmetic(left, right),
 
         _ => unreachable!(),
+    }
+}
+
+fn match_arithmetic(left: &Type, right: &Type) -> Option<Type> {
+    let expr_type = numeric_tower(left, right);
+
+    if expr_type.is_some() {
+        Some(expr_type.unwrap())
+    } else {
+        None
     }
 }
 
@@ -116,16 +126,6 @@ fn match_logical(left: &Type, right: &Type) -> Option<Type> {
     match (left, right) {
         (Type::Bool, Type::Bool) => Some(Type::Bool),
         _ => None
-    }
-}
-
-fn match_arithmetic(left: &Type, right: &Type) -> Option<Type> {
-    let expr_type = numeric_tower(left, right);
-
-    if expr_type.is_some() {
-        Some(expr_type.unwrap())
-    } else {
-        None
     }
 }
 
