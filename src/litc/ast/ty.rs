@@ -19,6 +19,15 @@ impl Type {
             _ => false,
         }
     }
+    
+    pub fn is_integer_type(&self) -> bool {
+        match self {
+            Type::Unt |
+            Type::Int
+            => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Type {
