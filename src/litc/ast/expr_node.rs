@@ -1,7 +1,7 @@
 use super::Expr;
 use crate::lexer::Span;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExprNode {
     pub expr: Expr,
     pub span: Span,
