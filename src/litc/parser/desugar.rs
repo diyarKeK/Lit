@@ -96,10 +96,6 @@ impl<'a> Desugar<'a> {
             }
         };
 
-        let mut updated_node = self.arena.get(id).clone();
-        updated_node.expr = new_expr.clone();
-        self.arena.set(id, updated_node);
-
         (new_expr, current_type)
     }
 
