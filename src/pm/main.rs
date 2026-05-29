@@ -6,6 +6,7 @@ use std::fs;
 use std::process;
 use std::path::Path;
 use std::process::Command;
+use std::time::Instant;
 
 const VERSION: &str = "v0.1.0";
 const HELP_TEXT: &str = "lit - Lit package manager\n\
@@ -22,7 +23,8 @@ const HELP_TEXT: &str = "lit - Lit package manager\n\
 \x1B[1m[Options]\x1B[0m\n  \
   -h, --help             Show this help message\n  \
   -v, --version          Show version\n  \
-  --litc-args \"args\"   Adds compiler arguments if you build or run\
+  -T                     Show how much time it took to compile the project into a binary\n  \
+  --litc-args \"args\"   Add compiler arguments if you build or run\
 ";
 
 enum Cmd {
@@ -34,18 +36,19 @@ enum Cmd {
 
 struct Options {
     cmd: Cmd,
+    mark_time: bool,
     litc_args: Vec<String>,
 }
 
 impl Options {
     fn parse(args: &[String]) -> Options {
         if args.is_empty() {
-            println!("Guide for lit: ");
-            Options::help();
+            println!("No arguments supplied. Use `lit -h` to get help");
             process::exit(0);
         }
 
         let mut cmd: Option<Cmd> = None;
+        let mut mark_time = false;
         let mut litc_args = Vec::new();
 
         let mut i = 0;
@@ -74,6 +77,8 @@ impl Options {
                 "run" => cmd = Some(Cmd::Run),
                 "check" => cmd = Some(Cmd::Check),
 
+                "-T" => mark_time = true,
+
                 "--litc-args" => {
                     i += 1;
                     if i >= args.len() {
@@ -101,7 +106,7 @@ impl Options {
             i += 1;
         }
 
-        Options { cmd: cmd.unwrap(), litc_args }
+        Options { cmd: cmd.unwrap(), mark_time, litc_args }
     }
 
     fn new(name: &str) {
@@ -228,6 +233,8 @@ fn main() {
     let argv: Vec<String> = env::args().skip(1).collect();
     let options = Options::parse(&argv);
 
+    let now = Instant::now();
+
     match options.cmd {
         Cmd::New { name } => {
             Options::new(&name);
@@ -235,5 +242,9 @@ fn main() {
         Cmd::Build => Options::build(options.litc_args, false),
         Cmd::Run => Options::build(options.litc_args, true),
         Cmd::Check => Options::check(),
+    }
+
+    if options.mark_time {
+        println!("Took: {:?}", now.elapsed());
     }
 }
