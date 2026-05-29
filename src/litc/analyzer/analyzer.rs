@@ -80,17 +80,27 @@ impl<'a> Analyzer<'a> {
                     )
                 }
 
-                if op.is_comparison() || op.is_arranging() {
+                if op.is_comparison() {
+                    Type::Bool
+                } else if
+                    (op.is_arithmetic() || op.is_arranging())
+                    && left_ty.is_num_type() && right_ty.is_num_type()
+                {
+                    left_ty
+                } else if op.is_logical() && left_ty == Type::Bool && right_ty == Type::Bool {
                     Type::Bool
                 } else {
-                    left_ty
+                    generate_error!(
+                        "Cannot apply operator `{op}` for types: `{left}` and `{right}`",
+                        op = op, left = left_ty, right = right_ty
+                    )
                 }
             }
 
             Expr::Unary { op, expr } => {
                 let expr_ty = self.infer_type(*expr);
 
-                if expr_ty.is_num_type() || expr_ty == Type::Bool {
+                if expr_ty.is_integer_type() || expr_ty == Type::Bool {
                     expr_ty
                 } else {
                     generate_error!(
