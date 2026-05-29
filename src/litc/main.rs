@@ -165,7 +165,7 @@ fn main() {
         return;
     }
 
-    let ir = codegen::generate(&program);
+    let ir = codegen::generate(program);
 
     if options.mark_time {
         println!("Took: {:?}", now.elapsed());
