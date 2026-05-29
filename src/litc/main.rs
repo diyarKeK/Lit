@@ -11,10 +11,11 @@ use std::env;
 use std::fs;
 use std::process;
 
-#[allow(unused_imports)] use ast::*;
+use ast::*;
 use lexer::Lexer;
 use parser::Parser;
 use analyzer::analyze;
+use parser::desugar;
 
 const VERSION: &str = "v0.1.0";
 const HELP_TEXT: &str = "litc - Lit language compiler\n\
@@ -144,7 +145,10 @@ fn main() {
         tokens.iter().for_each(|t| println!("{}", t));
     }
 
-    let program = Parser::new(tokens).parse();
+    let mut program = Parser::new(tokens).parse();
+
+    // TODO: See Desugar through to the end
+    desugar(&mut program);
 
     if options.print_ast {
         print_ast(&program);
