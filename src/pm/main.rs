@@ -132,7 +132,7 @@ impl Options {
         ).unwrap();
 
         let s = format!(
-            "\x1B[1;32m[Complete]\x1B[0m Created project `{name}`:\n\
+            "\x1B[1;32mComplete\x1B[0m Created project `{name}`:\n\
              {name}/\n  \
                out/bin/\n  \
                out/ir/\n  \
@@ -154,7 +154,7 @@ impl Options {
         let ll_path = &format!("out/ir/{}.ll", project_name);
         let exe_path = &format!("out/bin/{}.exe", project_name);
 
-        println!("\x1b[1;32mCompiling\x1B[0m `{}`...", src_path);
+        println!("\x1B[1;32mCompiling\x1B[0m `{}`...", src_path);
         let litc = Command::new("litc")
             .args(litc_args)
             .args([src_path, "-o", ll_path])
@@ -163,7 +163,7 @@ impl Options {
 
         if !litc.success() { generate_error!(""); }
 
-        println!("\x1b[1;32mLinking\x1b[0m   `{}`...", ll_path);
+        println!("\x1B[1;32mLinking\x1B[0m   `{}`...", ll_path);
         let clang = Command::new("clang")
             .args([
                 "--target=x86_64-pc-windows-gnu",
@@ -180,7 +180,7 @@ impl Options {
         println!("\x1B[1;32mDone.\x1B[0m      Built in: `{}`;", exe_path);
 
         if run_after {
-            println!("\x1b[1;32mRunning\x1b[0m   `{}`...\n", exe_path);
+            println!("\x1B[1;32mRunning\x1B[0m   `{}`...\n", exe_path);
             let code = Command::new(format!("./{}", exe_path))
                 .status()
                 .unwrap()
@@ -208,7 +208,7 @@ impl Options {
     fn check() {
         let src_path = "src/main.lit";
 
-        println!("[1/1] Checking `{}`...", src_path);
+        println!("\x1B[1;32mChecking\x1B[0m `{}`...", src_path);
         Command::new("litc")
             .args(["-S", src_path])
             .status()
