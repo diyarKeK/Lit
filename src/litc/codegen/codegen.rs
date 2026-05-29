@@ -5,7 +5,7 @@ use super::FuncCtx;
 use super::EmitState;
 use crate::ast::*;
 
-pub fn generate(program: &Program) -> String {
+pub fn generate(program: Program) -> String {
     let mut out = String::new();
 
     out.push_str("; Lit compiler v1 - generated LLVM IR\n\n");
@@ -276,7 +276,7 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
             }
         }
 
-        Expr::Binary { left, ..} => infer_llvm_type(arena, *left, var_types),
+        Expr::Binary { left, .. } => infer_llvm_type(arena, *left, var_types),
 
         Expr::Unary { expr, .. } => infer_llvm_type(arena, *expr, var_types),
     }
