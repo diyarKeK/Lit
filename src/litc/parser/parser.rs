@@ -152,7 +152,7 @@ impl Parser {
     }
 
     fn parse_comparison(&mut self) -> ExprId {
-        let mut expr = self.parse_logical();
+        let mut expr = self.parse_or();
 
         loop {
             let op = match self.peek().kind {
@@ -167,7 +167,7 @@ impl Parser {
 
             self.scroll();
 
-            let right = self.parse_logical();
+            let right = self.parse_or();
 
             expr = self.make_binary(op, expr, right);
         }
@@ -175,14 +175,70 @@ impl Parser {
         expr
     }
 
-    fn parse_logical(&mut self) -> ExprId {
+    fn parse_or(&mut self) -> ExprId {
+        let mut expr = self.parse_xor();
+
+        loop {
+            let op = match self.peek().kind {
+                TokenKind::Or | TokenKind::OrOr => BinaryOp::Or,
+                _ => break,
+            };
+
+            self.scroll();
+
+            let right = self.parse_xor();
+
+            expr = self.make_binary(op, expr, right);
+        }
+
+        expr
+    }
+
+    fn parse_xor(&mut self) -> ExprId {
+        let mut expr = self.parse_and();
+
+        loop {
+            let op = match self.peek().kind {
+                TokenKind::Caret | TokenKind::CaretCaret => BinaryOp::Xor,
+                _ => break,
+            };
+
+            self.scroll();
+
+            let right = self.parse_and();
+
+            expr = self.make_binary(op, expr, right);
+        }
+
+        expr
+    }
+
+    fn parse_and(&mut self) -> ExprId {
+        let mut expr = self.parse_bitwise_shift();
+
+        loop {
+            let op = match self.peek().kind {
+                TokenKind::And | TokenKind::AndAnd => BinaryOp::And,
+                _ => break,
+            };
+
+            self.scroll();
+
+            let right = self.parse_bitwise_shift();
+
+            expr = self.make_binary(op, expr, right);
+        }
+
+        expr
+    }
+
+    fn parse_bitwise_shift(&mut self) -> ExprId {
         let mut expr = self.parse_additive();
 
         loop {
             let op = match self.peek().kind {
-                TokenKind::AndAnd => BinaryOp::And,
-                TokenKind::OrOr => BinaryOp::Or,
-                TokenKind::XorXor => BinaryOp::Xor,
+                TokenKind::LShift => BinaryOp::LShift,
+                TokenKind::RShift => BinaryOp::RShift,
                 _ => break,
             };
 
@@ -217,7 +273,7 @@ impl Parser {
     }
 
     fn parse_term(&mut self) -> ExprId {
-        let mut expr = self.parse_factor();
+        let mut expr = self.parse_unary();
 
         loop {
             let op = match self.peek().kind {
@@ -229,7 +285,7 @@ impl Parser {
             
             self.scroll();
             
-            let right = self.parse_factor();
+            let right = self.parse_unary();
             
             expr = self.make_binary(op, expr, right);
         }
@@ -237,7 +293,7 @@ impl Parser {
         expr
     }
 
-    fn parse_factor(&mut self) -> ExprId {
+    fn parse_unary(&mut self) -> ExprId {
         match self.peek().kind.clone() {
             TokenKind::Minus => {
                 let start = self.peek().span.start;
