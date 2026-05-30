@@ -180,14 +180,11 @@ fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
     let padding = " ".repeat(indent);
     let expr_node = expr_arena.get(expr_id);
 
-    use Lit::*;
     match &expr_node.expr {
-        Expr::Lit(Unt(u)) => println!("{}Unt({}),", padding, u),
-        Expr::Lit(Int(i)) => println!("{}Int({}),", padding, i),
-        Expr::Lit(Float(f)) => println!("{}Float({}),", padding, f),
-        Expr::Lit(Bool(b)) => println!("{}Bool({}),", padding, b),
-        Expr::Lit(Str(s)) => println!("{}Str(\"{}\"),", padding, s),
+        Expr::Lit(lit) => println!("{}{},", padding, lit),
+
         Expr::Var(name) => println!("{}${},", padding, name),
+
         Expr::Binary { op, left, right } => {
             println!("{}Binary {{", padding);
             print_expr(expr_arena, *left, indent + 2);
@@ -195,6 +192,7 @@ fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
             print_expr(expr_arena, *right, indent + 2);
             println!("{}}}", padding);
         }
+
         Expr::Unary { op, expr } => {
             println!("{}Unary {{", padding);
             println!("{}  {},", padding, op);
