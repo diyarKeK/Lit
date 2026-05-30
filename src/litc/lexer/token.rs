@@ -50,17 +50,6 @@ pub enum TokenKind {
     Slash,              // `/`
     Percent,            // `%`
 
-    // Logical
-    And,                // `&`
-    Or,                 // `|`
-    Caret,                // `^`
-    Not,                // `~`
-    
-    AndAnd,             // `&&`
-    OrOr,               // `||`
-    XorXor,             // `^^`
-    Bang,               // `!`
-    
     // Comparison
     EqEq,               // `==`
     NotEq,              // `!=`
@@ -68,6 +57,21 @@ pub enum TokenKind {
     Lt,                 // `<`
     GtEq,               // `>=`
     LtEq,               // `<=`
+    
+    // Logical
+    And,                // `&`
+    Or,                 // `|`
+    Caret,              // `^`
+    Not,                // `~`
+    
+    AndAnd,             // `&&`
+    OrOr,               // `||`
+    CaretCaret,         // `^^`
+    Bang,               // `!`
+    
+    // Bitwise
+    LShift,             // `<<`
+    RShift,             // `>>`
 
     // Symbols
     LParen,             // `(`
@@ -126,7 +130,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Not => write!(f, "~"),
             TokenKind::AndAnd => write!(f, "&&"),
             TokenKind::OrOr => write!(f, "||"),
-            TokenKind::XorXor => write!(f, "^^"),
+            TokenKind::CaretCaret => write!(f, "^^"),
             TokenKind::Bang => write!(f, "!"),
             TokenKind::EqEq => write!(f, "=="),
             TokenKind::NotEq => write!(f, "!="),
@@ -134,6 +138,8 @@ impl fmt::Display for TokenKind {
             TokenKind::Lt => write!(f, "<"),
             TokenKind::GtEq => write!(f, ">="),
             TokenKind::LtEq => write!(f, "<="),
+            TokenKind::LShift => write!(f, "<<"),
+            TokenKind::RShift => write!(f, ">>"),
             TokenKind::LParen => write!(f, "("),
             TokenKind::RParen => write!(f, ")"),
             TokenKind::LBrace => write!(f, "{{"),
