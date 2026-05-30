@@ -93,10 +93,22 @@ impl Lexer {
             Some('~') => TokenKind::Not,
             Some('&') => self.match_next('&', TokenKind::AndAnd, TokenKind::And),
             Some('|') => self.match_next('|', TokenKind::OrOr, TokenKind::Or),
-            Some('^') => self.match_next('^', TokenKind::XorXor, TokenKind::Caret),
+            Some('^') => self.match_next('^', TokenKind::CaretCaret, TokenKind::Caret),
             Some('!') => self.match_next('=', TokenKind::NotEq, TokenKind::Bang),
-            Some('>') => self.match_next('=', TokenKind::GtEq, TokenKind::Gt),
-            Some('<') => self.match_next('=', TokenKind::LtEq, TokenKind::Lt),
+            Some('>') => {
+                match self.peek() {
+                    Some('=') => { self.scroll(); TokenKind::GtEq },
+                    Some('>') => { self.scroll(); TokenKind::RShift },
+                    _ => TokenKind::Gt,
+                }
+            },
+            Some('<') => {
+                match self.peek() {
+                    Some('=') => { self.scroll(); TokenKind::LtEq },
+                    Some('<') => { self.scroll(); TokenKind::LShift },
+                    _ => TokenKind::Lt,
+                }
+            },
 
             Some(q @ '"') => {
                 let mut s = String::new();
