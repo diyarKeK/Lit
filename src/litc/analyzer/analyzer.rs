@@ -100,12 +100,14 @@ impl<'a> Analyzer<'a> {
             Expr::Unary { op, expr } => {
                 let expr_ty = self.infer_type(*expr);
 
-                if expr_ty.is_integer_type() || expr_ty == Type::Bool {
+                if let UnaryOp::Minus = op && expr_ty.is_num_type() {
+                    expr_ty
+                } else if let UnaryOp::Not = op && (expr_ty.is_integer_type() || expr_ty == Type::Bool) {
                     expr_ty
                 } else {
                     generate_error!(
-                        "Cannot apply unary operator `{op}` for type: `{type}`",
-                        op = op, type = expr_ty
+                        "Cannot apply unary operator `{op}` for type: `{_type}`",
+                        op = op, _type = expr_ty
                     )
                 }
             }
