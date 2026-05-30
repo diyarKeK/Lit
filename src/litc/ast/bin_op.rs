@@ -4,24 +4,28 @@ use std::fmt;
 pub enum BinaryOp {
     
     // arithmetic
-    Add,    // `+`
-    Sub,    // `-`
-    Mul,    // `*`
-    Div,    // `/`
-    Mod,    // `%`
+    Add,      // `+`
+    Sub,      // `-`
+    Mul,      // `*`
+    Div,      // `/`
+    Mod,      // `%`
     
     // comparison
-    EqEq,   // `==`
-    NotEq,  // `!=`
-    Gt,     // `>`
-    Lt,     // `<`
-    GtEq,   // `>=`
-    LtEq,   // `<=`
+    EqEq,     // `==`
+    NotEq,    // `!=`
+    Gt,       // `>`
+    Lt,       // `<`
+    GtEq,     // `>=`
+    LtEq,     // `<=`
     
     // logical
-    And,    // `&`
-    Or,     // `|`
-    Xor,    // `^`
+    And,      // `&`
+    Or,       // `|`
+    Xor,      // `^`
+
+    // Bitwise
+    LShift,   // `<<`
+    RShift,   // `>>`
 }
 
 impl BinaryOp {
@@ -85,6 +89,8 @@ impl fmt::Display for BinaryOp {
             BinaryOp::And => write!(f, "&"),
             BinaryOp::Or => write!(f, "|"),
             BinaryOp::Xor => write!(f, "^"),
+            BinaryOp::LShift => write!(f, "<<"),
+            BinaryOp::RShift => write!(f, ">>"),
         }
     }
 }
