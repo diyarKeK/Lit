@@ -193,19 +193,13 @@ fn emit_expr(
         Expr::Unary { op, expr } => {
             let (value, _type) = emit_expr(out, arena, *expr, fn_name, ctx, state);
 
-            let instr = llvm_instr_for_unary_operator_by_type(op, &_type);
+            let (instr, literal) = llvm_instr_and_literal_for_unary_operator_by_type(op, &_type);
             let llvm_type = _type.get_alloca_type();
             let reg = state.next_reg();
 
-            let zero = match _type {
-                LlvmType::I64Unsigned | LlvmType::I64Signed => "0",
-                LlvmType::Double => "0.0",
-                _ => unreachable!(),
-            };
-
             out.push_str(&format!(
-                "  %r{reg} = {instr} {_type} {zero}, {value}\n",
-                reg = reg, instr = instr, _type = llvm_type, zero = zero, value = value,
+                "  %r{reg} = {instr} {_type} {lit}, {value}\n",
+                reg = reg, instr = instr, _type = llvm_type, lit = literal, value = value,
             ));
 
             (format!("%r{}", reg), _type)
@@ -234,11 +228,13 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
     }
 }
 
-fn llvm_instr_for_unary_operator_by_type(op: &UnaryOp, llvm_type: &LlvmType) -> &'static str {
+fn llvm_instr_and_literal_for_unary_operator_by_type(op: &UnaryOp, llvm_type: &LlvmType) -> (&'static str, &'static str) {
     match (op, llvm_type) {
-        (UnaryOp::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => "sub",
+        (UnaryOp::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => ("sub", "0"),
+        (UnaryOp::Minus, LlvmType::Double) => ("fsub", "0.0"),
 
-        (UnaryOp::Minus, LlvmType::Double) => "fsub",
+        (UnaryOp::Not, LlvmType::I64Unsigned | LlvmType::I64Signed) => ("xor", "-1"),
+        (UnaryOp::Not, LlvmType::I1) => ("xor", "1"),
 
         _ => unreachable!(),
     }
