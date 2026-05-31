@@ -20,6 +20,15 @@ impl Type {
         }
     }
     
+    pub fn is_integer_type(&self) -> bool {
+        match self {
+            Type::Unt |
+            Type::Int
+            => true,
+            _ => false,
+        }
+    }
+    
     pub fn is_logical_type(&self) -> bool {
         match self {
             Type::Unt |
