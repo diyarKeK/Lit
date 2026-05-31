@@ -116,7 +116,7 @@ impl<'a> Desugar<'a> {
                 }
             }
             Expr::Binary { op, left, right }
-                if op.is_arithmetic() || op.is_logical() => {
+                if op.is_arithmetic() || op.is_logical() || op.is_bitwise() => {
                 self.coerce_node_to(*left, target);
                 self.coerce_node_to(*right, target);
             }
