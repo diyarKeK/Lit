@@ -92,6 +92,11 @@ impl<'a> Desugar<'a> {
 
             Expr::Unary { op, expr } => {
                 let (_, inner_ty) = self.desugar_expr(expr);
+
+                if let UnaryOp::Minus = op && inner_ty == Type::Unt {
+                    self.coerce_node_to(expr, &Type::Int);
+                }
+
                 (Expr::Unary { op, expr }, inner_ty)
             }
         };
