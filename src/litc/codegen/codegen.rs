@@ -267,7 +267,7 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
 
 fn llvm_instr_and_literal_for_unary_operator_by_type(op: &UnaryOp, llvm_type: &LlvmType) -> (&'static str, &'static str) {
     match (op, llvm_type) {
-        (UnaryOp::Minus, LlvmType::I64Unsigned | LlvmType::I64Signed) => ("sub", "0"),
+        (UnaryOp::Minus, LlvmType::I64Signed) => ("sub", "0"),
         (UnaryOp::Minus, LlvmType::Double) => ("fsub", "0.0"),
 
         (UnaryOp::Not, LlvmType::I64Unsigned | LlvmType::I64Signed) => ("xor", "-1"),
