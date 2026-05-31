@@ -37,7 +37,7 @@ impl Lexer {
                 self.scroll();
             }
 
-            if self.peek() == Some('#') {
+            if self.peek() == Some('/') && let Some('/') = self.chars.get(self.pos + 1) {
                 while matches!(self.peek(), Some(c) if c != '\n') {
                     self.scroll();
                 }
