@@ -134,6 +134,7 @@ fn emit_println(
     }
 }
 
+#[allow(clippy::needless_return)]
 fn emit_expr(
     out: &mut String,
     arena: &ExprArena,
@@ -187,7 +188,15 @@ fn emit_expr(
                 "  %r{reg} = {instr} {_type} {l_value}, {r_value}\n",
                 reg = reg, instr = instr, _type = llvm_type, l_value = l_value, r_value = r_value,
             ));
-            (format!("%r{}", reg), l_type)
+
+            return (
+                format!("%r{}", reg),
+                if op.is_comparison() || op.is_arranging() {
+                    LlvmType::I1
+                } else {
+                    l_type
+                }
+            );
         }
 
         Expr::Unary { op, expr } => {
@@ -223,6 +232,26 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
         (BinaryOp::Mul, LlvmType::Double) => "fmul",
         (BinaryOp::Div, LlvmType::Double) => "fdiv",
         (BinaryOp::Mod, LlvmType::Double) => "frem",
+
+        (BinaryOp::EqEq, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "icmp eq",
+        (BinaryOp::NotEq, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "icmp ne",
+
+        (BinaryOp::Gt, LlvmType::I64Unsigned) => "icmp ugt",
+        (BinaryOp::Lt, LlvmType::I64Unsigned) => "icmp ult",
+        (BinaryOp::GtEq, LlvmType::I64Unsigned) => "icmp uge",
+        (BinaryOp::LtEq, LlvmType::I64Unsigned) => "icmp ule",
+
+        (BinaryOp::Gt, LlvmType::I64Signed) => "icmp sgt",
+        (BinaryOp::Lt, LlvmType::I64Signed) => "icmp slt",
+        (BinaryOp::GtEq, LlvmType::I64Signed) => "icmp sge",
+        (BinaryOp::LtEq, LlvmType::I64Signed) => "icmp sle",
+
+        (BinaryOp::EqEq, LlvmType::Double) => "fcmp oeq",
+        (BinaryOp::NotEq, LlvmType::Double) => "fcmp ue",
+        (BinaryOp::Gt, LlvmType::Double) => "fcmp ogt",
+        (BinaryOp::Lt, LlvmType::Double) => "fcmp olt",
+        (BinaryOp::GtEq, LlvmType::Double) => "fcmp oge",
+        (BinaryOp::LtEq, LlvmType::Double) => "fcmp ole",
 
         (BinaryOp::And, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "and",
         (BinaryOp::Or, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "or",
@@ -280,7 +309,13 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
             }
         }
 
-        Expr::Binary { left, .. } => infer_llvm_type(arena, *left, var_types),
+        Expr::Binary { op, left, .. } => {
+            if op.is_comparison() || op.is_arranging() {
+                LlvmType::I1
+            } else {
+                infer_llvm_type(arena, *left, var_types)
+            }
+        },
 
         Expr::Unary { expr, .. } => infer_llvm_type(arena, *expr, var_types),
     }
