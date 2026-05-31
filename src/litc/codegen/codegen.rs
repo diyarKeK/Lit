@@ -228,6 +228,10 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
         (BinaryOp::Or, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "or",
         (BinaryOp::Xor, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "xor",
 
+        (BinaryOp::LShift, LlvmType::I64Unsigned | LlvmType::I64Signed) => "shl",
+        (BinaryOp::RShift, LlvmType::I64Unsigned) => "lshr",
+        (BinaryOp::RShift, LlvmType::I64Signed) => "ashr",
+
         _ => unreachable!(),
     }
 }
