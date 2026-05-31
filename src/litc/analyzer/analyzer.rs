@@ -82,27 +82,27 @@ impl<'a> Analyzer<'a> {
 
                 if op.is_comparison() {
                     Type::Bool
-                    
-                } else if 
-                    op.is_arranging() 
-                    && left_ty.is_num_type() 
-                    && right_ty.is_num_type() 
+
+                } else if
+                    op.is_arranging()
+                    && left_ty.is_num_type()
+                    && right_ty.is_num_type()
                 {
                     Type::Bool
-                    
-                } else if 
-                    op.is_arithmetic() 
-                    && left_ty.is_num_type() 
+
+                } else if
+                    op.is_arithmetic()
+                    && left_ty.is_num_type()
                     && right_ty.is_num_type()
                 {
                     left_ty
-                    
+
                 } else if op.is_logical()
                     && left_ty.is_logical_type()
                     && right_ty.is_logical_type()
                 {
                     left_ty
-                    
+
                 } else {
                     generate_error!(
                         "Cannot apply operator `{op}` for types: `{left}` and `{right}`",
