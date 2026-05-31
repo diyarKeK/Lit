@@ -247,7 +247,7 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
         (BinaryOp::LtEq, LlvmType::I64Signed) => "icmp sle",
 
         (BinaryOp::EqEq, LlvmType::Double) => "fcmp oeq",
-        (BinaryOp::NotEq, LlvmType::Double) => "fcmp ue",
+        (BinaryOp::NotEq, LlvmType::Double) => "fcmp une",
         (BinaryOp::Gt, LlvmType::Double) => "fcmp ogt",
         (BinaryOp::Lt, LlvmType::Double) => "fcmp olt",
         (BinaryOp::GtEq, LlvmType::Double) => "fcmp oge",
