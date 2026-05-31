@@ -70,6 +70,15 @@ impl BinaryOp {
             _ => false,
         }
     }
+    
+    pub fn is_bitwise(&self) -> bool {
+        match self {
+            BinaryOp::LShift |
+            BinaryOp::RShift
+            => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for BinaryOp {
