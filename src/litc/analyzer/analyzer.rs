@@ -97,9 +97,17 @@ impl<'a> Analyzer<'a> {
                 {
                     left_ty
 
-                } else if op.is_logical()
+                } else if
+                    op.is_logical()
                     && left_ty.is_logical_type()
                     && right_ty.is_logical_type()
+                {
+                    left_ty
+
+                } else if
+                    op.is_bitwise()
+                    && left_ty.is_integer_type()
+                    && right_ty.is_integer_type()
                 {
                     left_ty
 
