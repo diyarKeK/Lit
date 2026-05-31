@@ -115,7 +115,8 @@ impl<'a> Desugar<'a> {
                     node.expr = Expr::Lit(Lit::Float(*i as f64));
                 }
             }
-            Expr::Binary { op, left, right } if op.is_arithmetic() => {
+            Expr::Binary { op, left, right }
+                if op.is_arithmetic() || op.is_logical() => {
                 self.coerce_node_to(*left, target);
                 self.coerce_node_to(*right, target);
             }
