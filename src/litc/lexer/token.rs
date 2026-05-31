@@ -27,6 +27,7 @@ pub enum TokenKind {
     // Keywords
     Fun,                // `fun`
 
+    // Primitive types
     Unt,                // `unt`
     Int,                // `int`
     Float,              // `float`
