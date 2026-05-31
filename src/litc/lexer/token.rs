@@ -26,6 +26,7 @@ impl fmt::Display for Token {
 pub enum TokenKind {
     // Keywords
     Fun,                // `fun`
+    As,                 // `as`
 
     // Primitive types
     Unt,                // `unt`
@@ -109,6 +110,7 @@ impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TokenKind::Fun => write!(f, "fun"),
+            TokenKind::As => write!(f, "as"),
             TokenKind::Unt => write!(f, "unt"),
             TokenKind::Int => write!(f, "int"),
             TokenKind::Float => write!(f, "float"),
