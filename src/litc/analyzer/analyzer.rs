@@ -122,7 +122,7 @@ impl<'a> Analyzer<'a> {
             Expr::Unary { op, expr } => {
                 let expr_ty = self.infer_type(*expr);
 
-                if let UnaryOp::Minus = op && expr_ty.is_num_type() {
+                if let UnaryOp::Minus = op && (expr_ty == Type::Int || expr_ty == Type::Float) {
                     expr_ty
                 } else if let UnaryOp::Not = op && expr_ty.is_logical_type() {
                     expr_ty
