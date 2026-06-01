@@ -3,6 +3,7 @@ mod ast;
 mod codegen;
 mod lexer;
 mod parser;
+mod resolver;
 mod utils;
 
 use std::path::PathBuf;
@@ -14,8 +15,8 @@ use std::process;
 use ast::*;
 use lexer::Lexer;
 use parser::Parser;
+use resolver::resolve;
 use analyzer::analyze;
-use parser::resolve;
 
 const VERSION: &str = "v0.1.0";
 const HELP_TEXT: &str = "litc - Lit language compiler\n\
