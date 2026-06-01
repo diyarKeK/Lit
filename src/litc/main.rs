@@ -15,7 +15,7 @@ use ast::*;
 use lexer::Lexer;
 use parser::Parser;
 use analyzer::analyze;
-use parser::desugar;
+use parser::resolve;
 
 const VERSION: &str = "v0.1.0";
 const HELP_TEXT: &str = "litc - Lit language compiler\n\
@@ -148,7 +148,7 @@ fn main() {
     let mut program = Parser::new(tokens).parse();
 
     // TODO: See Desugar through to the end
-    desugar(&mut program);
+    resolve(&mut program);
 
     if options.print_ast {
         print_ast(&program);

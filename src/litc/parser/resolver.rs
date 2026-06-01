@@ -1,34 +1,34 @@
 use std::collections::HashMap;
 use crate::ast::*;
 
-pub fn desugar(program: &mut Program) {
-    let mut desugar = Desugar::new(&mut program.expr_arena);
+pub fn resolve(program: &mut Program) {
+    let mut resolver = Resolver::new(&mut program.expr_arena);
 
     for func in &mut program.funcs {
-        desugar.desugar_func(func);
+        resolver.resolve_func(func);
     }
 }
 
-struct Desugar<'a> {
+struct Resolver<'a> {
     arena: &'a mut ExprArena,
     declared: HashMap<String, Type>,
 }
 
-impl<'a> Desugar<'a> {
-    fn new(expr_arena: &'a mut ExprArena) -> Desugar<'a> {
-        Desugar {
+impl<'a> Resolver<'a> {
+    fn new(expr_arena: &'a mut ExprArena) -> Resolver<'a> {
+        Resolver {
             arena: expr_arena,
             declared: HashMap::new(),
         }
     }
 
-    fn desugar_func(&mut self, func: &mut FuncDef) {
+    fn resolve_func(&mut self, func: &mut FuncDef) {
         self.declared.clear();
 
         for stmt in &mut func.body {
             match stmt {
                 Stmt::VarDecl(v) => {
-                    let (_, expr_type) = self.desugar_expr(v.expr_id);
+                    let (_, expr_type) = self.resolve_expr(v.expr_id);
 
                     if expr_type == Type::Unt && v._type != Type::Unt {
                         self.coerce_node_to(v.expr_id, &v._type);
@@ -37,13 +37,13 @@ impl<'a> Desugar<'a> {
                     self.declared.insert(v.name.clone(), v._type.clone());
                 }
                 Stmt::Println(expr_id) => {
-                    self.desugar_expr(*expr_id);
+                    self.resolve_expr(*expr_id);
                 }
             }
         }
     }
 
-    fn desugar_expr(&mut self, id: ExprId) -> (Expr, Type) {
+    fn resolve_expr(&mut self, id: ExprId) -> (Expr, Type) {
         let expr_node = self.arena.get(id);
         let expr = expr_node.expr.clone();
 
@@ -61,11 +61,11 @@ impl<'a> Desugar<'a> {
             }
 
             Expr::Binary { op, left, right } => {
-                let (_, left_ty) = self.desugar_expr(left);
-                let (_, right_ty) = self.desugar_expr(right);
+                let (_, left_ty) = self.resolve_expr(left);
+                let (_, right_ty) = self.resolve_expr(right);
 
                 if left_ty.is_num_type() && right_ty.is_num_type() {
-                    if let Some(target_ty) = Desugar::numeric_tower(&left_ty, &right_ty) {
+                    if let Some(target_ty) = Resolver::numeric_tower(&left_ty, &right_ty) {
 
                         if left_ty != target_ty { self.coerce_node_to(left, &target_ty); }
                         if right_ty != target_ty { self.coerce_node_to(right, &target_ty); }
@@ -91,7 +91,7 @@ impl<'a> Desugar<'a> {
             }
 
             Expr::Unary { op, expr } => {
-                let (_, inner_ty) = self.desugar_expr(expr);
+                let (_, inner_ty) = self.resolve_expr(expr);
 
                 if let UnaryOp::Minus = op && inner_ty == Type::Unt {
                     self.coerce_node_to(expr, &Type::Int);
@@ -101,7 +101,7 @@ impl<'a> Desugar<'a> {
             }
             
             Expr::Cast { expr, to } => {
-                let (_, inner_ty) = self.desugar_expr(expr);
+                let (_, inner_ty) = self.resolve_expr(expr);
 
                 (Expr::Cast { expr, to }, inner_ty)
             }

@@ -1,5 +1,5 @@
 mod parser;
-mod desugar;
+mod resolver;
 
 pub use parser::Parser;
-pub use desugar::desugar;
+pub use resolver::resolve;
