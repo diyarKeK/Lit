@@ -99,6 +99,12 @@ impl<'a> Desugar<'a> {
 
                 (Expr::Unary { op, expr }, inner_ty)
             }
+            
+            Expr::Cast { expr, to } => {
+                let (_, inner_ty) = self.desugar_expr(expr);
+
+                (Expr::Cast { expr, to }, inner_ty)
+            }
         };
 
         (new_expr, current_type)
