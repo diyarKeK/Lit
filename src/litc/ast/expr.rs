@@ -1,6 +1,6 @@
-use crate::ast::bin_op::BinaryOp;
-use crate::ast::Type;
-use crate::ast::un_op::UnaryOp;
+use super::bin_op::BinaryOp;
+use super::ty::Type;
+use super::un_op::UnaryOp;
 use super::expr_arena::ExprId;
 use super::lit::Lit;
 
