@@ -1,7 +1,3 @@
-interface Formatter {
-    fun fmt(): str;
-}
-
 class String {
     Vec<u8> chars;
 
