@@ -199,6 +199,13 @@ fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
             print_expr(expr_arena, *expr, indent + 2);
             println!("{}}}", padding);
         }
+
+        Expr::Cast { expr, to } => {
+            println!("{}Cast {{", padding);
+            print_expr(expr_arena, *expr, indent + 2);
+            println!("{}  as {}", padding, to);
+            println!("{}}}", padding);
+        }
     }
 }
 
