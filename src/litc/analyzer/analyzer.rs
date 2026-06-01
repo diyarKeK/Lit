@@ -133,6 +133,20 @@ impl<'a> Analyzer<'a> {
                     )
                 }
             }
+
+            Expr::Cast { expr, to } => {
+                let expr_ty = self.infer_type(*expr);
+
+                if !expr_ty.is_num_type() {
+                    generate_error!("Cannot cast {} to type `{}`", expr_ty, to);
+                }
+
+                if !to.is_num_type() {
+                    generate_error!("Cannot cast anything to type `{}`", to);
+                }
+
+                to.clone()
+            }
         }
     }
 }
