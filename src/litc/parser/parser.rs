@@ -273,7 +273,7 @@ impl Parser {
     }
 
     fn parse_term(&mut self) -> ExprId {
-        let mut expr = self.parse_unary();
+        let mut expr = self.parse_cast();
 
         loop {
             let op = match self.peek().kind {
@@ -285,9 +285,42 @@ impl Parser {
             
             self.scroll();
             
-            let right = self.parse_unary();
+            let right = self.parse_cast();
             
             expr = self.make_binary(op, expr, right);
+        }
+
+        expr
+    }
+
+    fn parse_cast(&mut self) -> ExprId {
+        let mut expr = self.parse_unary();
+
+        loop {
+            if let TokenKind::As = self.peek().kind {
+                self.scroll();
+
+                let type_token = self.advance();
+                let to_type = match type_token.kind {
+                    TokenKind::Unt => Type::Unt,
+                    TokenKind::Int => Type::Int,
+                    TokenKind::Float => Type::Float,
+                    TokenKind::Bool => Type::Bool,
+                    TokenKind::Str => Type::Str,
+
+                    other => generate_error!("Expected type after keyword `as`, but got: `{}`", other),
+                };
+
+                let start = self.expr_arena.get(expr).span.start;
+                let end = type_token.span.end;
+
+                expr = self.expr_arena.add(ExprNode::new(
+                    Expr::Cast { expr, to: to_type },
+                    Span::new(start, end),
+                ));
+            } else {
+                break;
+            }
         }
 
         expr
