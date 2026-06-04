@@ -29,4 +29,8 @@ impl ExprArena {
     pub fn set(&mut self, id: ExprId, node: ExprNode) {
         self.nodes[id] = node;
     }
+    
+    pub fn nodes(&self) -> &Vec<ExprNode> {
+        &self.nodes
+    }
 }
