@@ -5,6 +5,7 @@ mod lexer;
 mod parser;
 mod resolver;
 mod utils;
+mod hir;
 
 use std::path::PathBuf;
 use std::time::Instant;
