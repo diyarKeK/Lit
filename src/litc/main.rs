@@ -148,7 +148,7 @@ fn main() {
 
     let mut program = Parser::new(tokens).parse();
 
-    // TODO: See Desugar through to the end
+    // TODO: See Resolver through to the end
     resolve(&mut program);
 
     if options.print_ast {
@@ -211,6 +211,37 @@ fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
 }
 
 fn print_ast(program: &Program) {
+    println!("Expr Arena:");
+    for (i, node) in program.expr_arena.nodes().iter().enumerate() {
+        print!("  {}: ", i);
+
+        let expr = &node.expr;
+
+        match expr {
+            Expr::Lit(lit) => println!("{}", lit),
+            Expr::Var(name) => println!("Var({})", name),
+            Expr::Binary { op, left, right } => {
+                println!("Binary {{");
+                println!("    op: {:?}", op);
+                println!("    left: {}", left);
+                println!("    right: {}", right);
+                println!("  }}");
+            }
+            Expr::Unary { op, expr } => {
+                println!("Unary {{");
+                println!("    op: {:?}", op);
+                println!("    expr: {}", expr);
+                println!("  }}");
+            }
+            Expr::Cast { expr, to } => {
+                println!("Cast {{");
+                println!("    expr: {}", expr);
+                println!("    to: {}", to);
+                println!("  }}");
+            }
+        }
+    }
+
     println!("Program:");
     for func in &program.funcs {
         println!("  FuncDef: {}()", func.name);
