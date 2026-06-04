@@ -64,7 +64,7 @@ pub enum TokenKind {
     And,                // `&`
     Or,                 // `|`
     Caret,              // `^`
-    Not,                // `~`
+    Tilde,                // `~`
     
     AndAnd,             // `&&`
     OrOr,               // `||`
@@ -130,7 +130,7 @@ impl fmt::Display for TokenKind {
             TokenKind::And => write!(f, "&"),
             TokenKind::Or => write!(f, "|"),
             TokenKind::Caret => write!(f, "^"),
-            TokenKind::Not => write!(f, "~"),
+            TokenKind::Tilde => write!(f, "~"),
             TokenKind::AndAnd => write!(f, "&&"),
             TokenKind::OrOr => write!(f, "||"),
             TokenKind::CaretCaret => write!(f, "^^"),
