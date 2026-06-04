@@ -1,3 +1,5 @@
+use crate::ast::Type;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum LlvmType {
     I64Unsigned,    // i64
@@ -8,6 +10,16 @@ pub enum LlvmType {
 }
 
 impl LlvmType {
+    pub fn from(ty: &Type) -> LlvmType {
+        match ty {
+            Type::Unt => LlvmType::I64Unsigned,
+            Type::Int => LlvmType::I64Signed,
+            Type::Float => LlvmType::Double,
+            Type::Bool => LlvmType::I1,
+            Type::Str => LlvmType::I8Ptr,
+        }
+    }
+    
     pub fn get_alloca_type(&self) -> &'static str {
         match self {
             LlvmType::I64Unsigned => "i64",
