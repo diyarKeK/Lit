@@ -213,6 +213,29 @@ fn emit_expr(
 
             (format!("%r{}", reg), _type)
         }
+
+        Expr::Cast { expr, to } => {
+            let (value, from_type) = emit_expr(out, arena, *expr, fn_name, ctx, state);
+
+            let to_type = LlvmType::from(to);
+
+            let instr = llvm_instr_for_cast(&from_type, &to_type);
+
+            if instr.eq("") {
+                return (value, to_type)
+            }
+
+            let from_llvm_type = from_type.get_alloca_type();
+            let to_llvm_type = to_type.get_alloca_type();
+            let reg = state.next_reg();
+
+            out.push_str(&format!(
+                "  %r{reg} = {instr} {from} {value} to {to}\n",
+                reg = reg, instr = instr, from = from_llvm_type, value = value, to = to_llvm_type,
+            ));
+
+            (format!("%r{}", reg), to_type)
+        }
     }
 }
 
@@ -277,6 +300,22 @@ fn llvm_instr_and_literal_for_unary_operator_by_type(op: &UnaryOp, llvm_type: &L
     }
 }
 
+fn llvm_instr_for_cast(from: &LlvmType, to: &LlvmType) -> &'static str {
+    match (from, to) {
+        (LlvmType::I64Unsigned, LlvmType::I64Signed) |
+        (LlvmType::I64Signed, LlvmType::I64Unsigned)
+        => "",
+
+        (LlvmType::I64Unsigned, LlvmType::Double) => "uitofp",
+        (LlvmType::I64Signed, LlvmType::Double) => "sitofp",
+
+        (LlvmType::Double, LlvmType::I64Unsigned) => "fptoui",
+        (LlvmType::Double, LlvmType::I64Signed) => "fptosi",
+
+        _ => unreachable!(),
+    }
+}
+
 fn escape_llvm(s: &str) -> String {
     s.chars().flat_map(|c| {
         let b = c as u32;
@@ -300,13 +339,7 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
         Expr::Lit(Lit::Str(_)) => LlvmType::I8Ptr,
 
         Expr::Var(name) => {
-            match var_types.get(name).unwrap() {
-                Type::Unt => LlvmType::I64Unsigned,
-                Type::Int => LlvmType::I64Signed,
-                Type::Float => LlvmType::Double,
-                Type::Bool => LlvmType::I1,
-                Type::Str => LlvmType::I8Ptr,
-            }
+            LlvmType::from(var_types.get(name).unwrap())
         }
 
         Expr::Binary { op, left, .. } => {
@@ -318,5 +351,7 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
         },
 
         Expr::Unary { expr, .. } => infer_llvm_type(arena, *expr, var_types),
+
+        Expr::Cast { to, .. } => LlvmType::from(to),
     }
 }
