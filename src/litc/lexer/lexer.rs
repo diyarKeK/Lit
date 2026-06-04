@@ -77,32 +77,34 @@ impl Lexer {
         
         let start = self.pos;
 
-        let kind = match self.advance() {
-            None => TokenKind::Eof,
-            Some('(') => TokenKind::LParen,
-            Some(')') => TokenKind::RParen,
-            Some('{') => TokenKind::LBrace,
-            Some('}') => TokenKind::RBrace,
-            Some(';') => TokenKind::Semicolon,
-            Some('=') => self.match_next('=', TokenKind::EqEq, TokenKind::Assign),
-            Some('+') => TokenKind::Plus,
-            Some('-') => TokenKind::Minus,
-            Some('*') => TokenKind::Star,
-            Some('/') => TokenKind::Slash,
-            Some('%') => TokenKind::Percent,
-            Some('~') => TokenKind::Not,
-            Some('&') => self.match_next('&', TokenKind::AndAnd, TokenKind::And),
-            Some('|') => self.match_next('|', TokenKind::OrOr, TokenKind::Or),
-            Some('^') => self.match_next('^', TokenKind::CaretCaret, TokenKind::Caret),
-            Some('!') => self.match_next('=', TokenKind::NotEq, TokenKind::Bang),
-            Some('>') => {
+        let char = self.advance().unwrap_or('\0');
+
+        let kind = match char {
+            '\0' => TokenKind::Eof,
+            '(' => TokenKind::LParen,
+            ')' => TokenKind::RParen,
+            '{' => TokenKind::LBrace,
+            '}' => TokenKind::RBrace,
+            ';' => TokenKind::Semicolon,
+            '=' => self.match_next('=', TokenKind::EqEq, TokenKind::Assign),
+            '+' => TokenKind::Plus,
+            '-' => TokenKind::Minus,
+            '*' => TokenKind::Star,
+            '/' => TokenKind::Slash,
+            '%' => TokenKind::Percent,
+            '~' => TokenKind::Tilde,
+            '&' => self.match_next('&', TokenKind::AndAnd, TokenKind::And),
+            '|' => self.match_next('|', TokenKind::OrOr, TokenKind::Or),
+            '^' => self.match_next('^', TokenKind::CaretCaret, TokenKind::Caret),
+            '!' => self.match_next('=', TokenKind::NotEq, TokenKind::Bang),
+            '>' => {
                 match self.peek() {
                     Some('=') => { self.scroll(); TokenKind::GtEq },
                     Some('>') => { self.scroll(); TokenKind::RShift },
                     _ => TokenKind::Gt,
                 }
             },
-            Some('<') => {
+            '<' => {
                 match self.peek() {
                     Some('=') => { self.scroll(); TokenKind::LtEq },
                     Some('<') => { self.scroll(); TokenKind::LShift },
@@ -110,7 +112,7 @@ impl Lexer {
                 }
             },
 
-            Some(q @ '"') => {
+            q @ '"' => {
                 let mut s = String::new();
 
                 while let Some(c) = self.peek() {
@@ -133,7 +135,7 @@ impl Lexer {
                 TokenKind::StringLit(s)
             }
 
-            Some(c) if c.is_ascii_digit() => {
+            c if c.is_ascii_digit() => {
                 let mut num = String::from(c);
                 let mut is_float = false;
 
@@ -157,7 +159,7 @@ impl Lexer {
                 }
             }
 
-            Some(c) if c.is_alphabetic() || c == '_' => {
+            c if c.is_alphabetic() || c == '_' => {
                 let mut word = String::from(c);
                 while let Some(nc) = self.peek() {
                     if nc.is_alphanumeric() || nc == '_' {
@@ -183,7 +185,7 @@ impl Lexer {
                 }
             }
 
-            Some(other) => generate_error!("Unrecognized character: `{}`", other),
+            other => generate_error!("Unrecognized character: `{}`", other),
         };
 
         let span = Span::new(start, self.pos);
