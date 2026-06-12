@@ -9,6 +9,7 @@ pub fn generate(program: Program) -> String {
     let mut out = String::new();
 
     out.push_str("; Lit compiler v1 - generated LLVM IR\n\n");
+    out.push_str("declare i32 @putchar(i32)\n");
     out.push_str("declare i32 @puts(i8* nocapture)\n");
     out.push_str("declare i32 @printf(i8*, ...)\n\n");
 
@@ -108,6 +109,24 @@ fn emit_println(
             ));
         }
 
+        LlvmType::I8 => {
+            let rs = state.next_reg();
+
+            out.push_str(&format!(
+                "  %r{rs} = zext i8 {val} to i32\n",
+                rs = rs, val = val,
+            ));
+
+            out.push_str(&format!(
+                "  call i32 @putchar(i32 %r{rs})\n",
+                rs = rs,
+            ));
+
+            out.push_str(
+                "  call i32 @putchar(i32 10)\n",
+            );
+        }
+
         LlvmType::I1 => {
             let rt = state.next_reg();
             let rf = state.next_reg();
@@ -152,6 +171,7 @@ fn emit_expr(
         Expr::Lit(Int(i)) => (format!("{}", i), LlvmType::I64Signed),
         Expr::Lit(Float(f)) => (format!("{:.6e}", f), LlvmType::Double),
         Expr::Lit(Bool(b)) => (format!("{}", *b as i32), LlvmType::I1),
+        Expr::Lit(Char(c)) => (format!("{}", *c as i32), LlvmType::I8),
         Expr::Lit(Str(s)) => {
             let b = s.len() + 1;
             let si = state.next_str_idx();
@@ -336,6 +356,7 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
         Expr::Lit(Lit::Int(_)) => LlvmType::I64Signed,
         Expr::Lit(Lit::Float(_)) => LlvmType::Double,
         Expr::Lit(Lit::Bool(_)) => LlvmType::I1,
+        Expr::Lit(Lit::Char(_)) => LlvmType::I8,
         Expr::Lit(Lit::Str(_)) => LlvmType::I8Ptr,
 
         Expr::Var(name) => {
