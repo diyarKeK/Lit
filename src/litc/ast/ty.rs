@@ -6,6 +6,7 @@ pub enum Type {
     Int,      // signed 64-bit integer
     Float,    // 64-bit number with floating point
     Bool,     // boolean
+    Char,     // character
     Str,      // string
 }
 
@@ -47,6 +48,7 @@ impl fmt::Display for Type {
             Type::Int => write!(f, "int"),
             Type::Float => write!(f, "float"),
             Type::Bool => write!(f, "bool"),
+            Type::Char => write!(f, "char"),
             Type::Str => write!(f, "str"),
         }
     }
