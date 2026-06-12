@@ -1,36 +1,41 @@
+import std::str::String;
+
 interface Formatter {
     fun fmt(): str;
 }
 
-$unt : Formatter {
-    override fun fmt(): str {
+impl Formatter {
 
+    $unt {
+        override fun fmt(): str {
+
+        }
     }
-}
 
-$int : Formatter {
-    override fun fmt(): str {
+    $int {
+        override fun fmt(): str {
 
+        }
     }
-}
 
-$float : Formatter {
-    override fun fmt(): str {
+    $float {
+        override fun fmt(): str {
 
+        }
     }
-}
 
-$bool : Formatter {
-    override fun fmt(): str {
-        return switch self {
-            true => "true",
-            false => "false",
-        };
+    $bool {
+        override fun fmt(): str {
+            return switch self {
+                true => "true",
+                false => "false",
+            };
+        }
     }
-}
 
-$str : Formatter {
-    override fun fmt(): str {
-        return self;
+    $str {
+        override fun fmt(): str {
+            return self;
+        }
     }
 }
