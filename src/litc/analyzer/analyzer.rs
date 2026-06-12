@@ -61,6 +61,7 @@ impl<'a> Analyzer<'a> {
             Expr::Lit(Int(_)) => Type::Int,
             Expr::Lit(Float(_)) => Type::Float,
             Expr::Lit(Bool(_)) => Type::Bool,
+            Expr::Lit(Char(_)) => Type::Char,
             Expr::Lit(Str(_)) => Type::Str,
 
             Expr::Var(name) => {
