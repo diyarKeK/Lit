@@ -6,7 +6,7 @@ pub enum LlvmType {
     I64Signed,      // i64
     Double,         // double
     I1,             // i1
-    I8,             // i8
+    Char,           // i8
     I8Ptr,          // i8*
 }
 
@@ -17,7 +17,7 @@ impl LlvmType {
             Type::Int => LlvmType::I64Signed,
             Type::Float => LlvmType::Double,
             Type::Bool => LlvmType::I1,
-            Type::Char => LlvmType::I8,
+            Type::Char => LlvmType::Char,
             Type::Str => LlvmType::I8Ptr,
         }
     }
@@ -28,7 +28,7 @@ impl LlvmType {
             LlvmType::I64Signed => "i64",
             LlvmType::Double => "double",
             LlvmType::I1 => "i1",
-            LlvmType::I8 => "i8",
+            LlvmType::Char => "i8",
             LlvmType::I8Ptr => "i8*",
         }
     }
