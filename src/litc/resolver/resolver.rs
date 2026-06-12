@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use crate::ast::*;
 
 pub fn resolve(program: &mut Program) {
@@ -50,9 +51,10 @@ impl<'a> Resolver<'a> {
         use Lit::*;
         let (new_expr, current_type) = match expr {
             Expr::Lit(Unt(u)) => (Expr::Lit(Unt(u)), Type::Unt),
-            Expr::Lit(Int(u)) => (Expr::Lit(Int(u)), Type::Int),
-            Expr::Lit(Float(u)) => (Expr::Lit(Float(u)), Type::Float),
-            Expr::Lit(Bool(u)) => (Expr::Lit(Bool(u)), Type::Bool),
+            Expr::Lit(Int(i)) => (Expr::Lit(Int(i)), Type::Int),
+            Expr::Lit(Float(f)) => (Expr::Lit(Float(f)), Type::Float),
+            Expr::Lit(Bool(b)) => (Expr::Lit(Bool(b)), Type::Bool),
+            Expr::Lit(Char(c)) => (Expr::Lit(Char(c)), Type::Char),
             Expr::Lit(Str(s)) => (Expr::Lit(Str(s)), Type::Str),
 
             Expr::Var(ref name) => {
@@ -101,9 +103,38 @@ impl<'a> Resolver<'a> {
             }
             
             Expr::Cast { expr, to } => {
-                let (_, inner_ty) = self.resolve_expr(expr);
+                self.resolve_expr(expr);
+                
+                // TODO: Хуйня, переделывай!
+                
+                /*if inner_ty == to {
+                    let inner_node = self.arena.get(expr).clone();
+                    self.arena.set(id, inner_node);
 
-                (Expr::Cast { expr, to }, inner_ty)
+                    (inner_expr, inner_ty)
+                } else {
+                    if let Expr::Lit(lit) = &inner_expr {
+                        let folded_expr = match (lit, &to) {
+                            (Unt(u), Type::Int) => Some(Expr::Lit(Int(*u as i64))),
+                            (Unt(u), Type::Float) => Some(Expr::Lit(Float(*u as f64))),
+                            (Int(i), Type::Unt) => Some(Expr::Lit(Unt(*i as u64))),
+                            (Int(i), Type::Float) => Some(Expr::Lit(Float(*i as f64))),
+                            (Float(f), Type::Unt) => Some(Expr::Lit(Unt(*f as u64))),
+                            (Float(f), Type::Int) => Some(Expr::Lit(Int(*f as i64))),
+                            _ => None,
+                        };
+
+                        if let Some(new_lit) = folded_expr {
+                            let mut node = self.arena.get(id).clone();
+                            node.expr = new_lit.clone();
+                            self.arena.set(id, node);
+
+                            return (new_lit, to);
+                        }
+                    }
+                }*/
+
+                (Expr::Cast { expr, to: to.clone() }, to)
             }
         };
 
