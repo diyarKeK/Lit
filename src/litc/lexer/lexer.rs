@@ -135,6 +135,23 @@ impl Lexer {
                 TokenKind::StringLit(s)
             }
 
+            q @ '\'' => {
+                let mut ch = self.advance().unwrap();
+
+                if ch == '\\' {
+                    let unicode = self.read_escape();
+                    ch = unicode;
+                }
+
+                if self.peek() != Some(q) {
+                    generate_error!("Unterminated char literal");
+                }
+
+                self.scroll();
+
+                TokenKind::CharLit(ch)
+            }
+
             c if c.is_ascii_digit() => {
                 let mut num = String::from(c);
                 let mut is_float = false;
@@ -177,6 +194,7 @@ impl Lexer {
                     "int" => TokenKind::Int,
                     "float" => TokenKind::Float,
                     "bool" => TokenKind::Bool,
+                    "char" => TokenKind::Char,
                     "str" => TokenKind::Str,
                     "true" => TokenKind::BoolLit(true),
                     "false" => TokenKind::BoolLit(false),
@@ -200,6 +218,7 @@ impl Lexer {
             'c' => '\x1B',
             '"' => '"',
             '\\' => '\\',
+            '\'' => '\'',
             other => {
                 generate_error!("Cannot resolve: `\\{}` unicode", other)
             },
