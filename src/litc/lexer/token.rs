@@ -33,16 +33,18 @@ pub enum TokenKind {
     Int,                // `int`
     Float,              // `float`
     Bool,               // `bool`
+    Char,               // `char`
     Str,                // `str`
 
     // Identifier
     Ident(String),      // identifier
     
     // Literals
-    StringLit(String),
     NumLit(u64),
     FloatLit(f64),
     BoolLit(bool),
+    CharLit(char),
+    StringLit(String),
 
     // Operators
     Assign,             // `=`
@@ -93,6 +95,7 @@ impl TokenKind {
             TokenKind::Int |
             TokenKind::Float |
             TokenKind::Bool |
+            TokenKind::Char |
             TokenKind::Str => true,
             _ => false,
         }
@@ -115,12 +118,14 @@ impl fmt::Display for TokenKind {
             TokenKind::Int => write!(f, "int"),
             TokenKind::Float => write!(f, "float"),
             TokenKind::Bool => write!(f, "bool"),
+            TokenKind::Char => write!(f, "char"),
             TokenKind::Str => write!(f, "str"),
             TokenKind::Ident(name) => write!(f, "{}", name),
             TokenKind::StringLit(s) => write!(f, "\"{}\"", s),
             TokenKind::NumLit(n) => write!(f, "{}", n),
             TokenKind::FloatLit(n) => write!(f, "{}", n),
             TokenKind::BoolLit(b) => write!(f, "{}", b),
+            TokenKind::CharLit(c) => write!(f, "{}", c),
             TokenKind::Assign => write!(f, "="),
             TokenKind::Plus => write!(f, "+"),
             TokenKind::Minus => write!(f, "-"),
@@ -148,7 +153,7 @@ impl fmt::Display for TokenKind {
             TokenKind::LBrace => write!(f, "{{"),
             TokenKind::RBrace => write!(f, "}}"),
             TokenKind::Semicolon => write!(f, ";"),
-            TokenKind::Eof => write!(f, "`End_Of_File`"),
+            TokenKind::Eof => write!(f, "End_Of_File"),
         }
     }
 }
