@@ -276,8 +276,8 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
         (BinaryOp::Div, LlvmType::Double) => "fdiv",
         (BinaryOp::Mod, LlvmType::Double) => "frem",
 
-        (BinaryOp::EqEq, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "icmp eq",
-        (BinaryOp::NotEq, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "icmp ne",
+        (BinaryOp::EqEq, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1 | LlvmType::Char) => "icmp eq",
+        (BinaryOp::NotEq, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1 | LlvmType::Char) => "icmp ne",
 
         (BinaryOp::Gt, LlvmType::I64Unsigned) => "icmp ugt",
         (BinaryOp::Lt, LlvmType::I64Unsigned) => "icmp ult",
