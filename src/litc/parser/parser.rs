@@ -117,6 +117,7 @@ impl Parser {
             TokenKind::Int => Type::Int,
             TokenKind::Float => Type::Float,
             TokenKind::Bool => Type::Bool,
+            TokenKind::Char => Type::Char,
             TokenKind::Str => Type::Str,
 
             other => generate_error!("Unknown type: `{}`", other),
@@ -427,6 +428,18 @@ impl Parser {
 
                 self.expr_arena.add(ExprNode::new(
                     Expr::Lit(Lit::Bool(b)),
+                    Span::new(start, end),
+                ))
+            }
+            
+            TokenKind::CharLit(c) => {
+                let start = self.peek().span.start;
+                let end = self.peek().span.end;
+                
+                self.scroll();
+                
+                self.expr_arena.add(ExprNode::new(
+                    Expr::Lit(Lit::Char(c)),
                     Span::new(start, end),
                 ))
             }
