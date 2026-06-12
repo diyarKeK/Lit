@@ -109,7 +109,7 @@ fn emit_println(
             ));
         }
 
-        LlvmType::I8 => {
+        LlvmType::Char => {
             let rs = state.next_reg();
 
             out.push_str(&format!(
@@ -171,7 +171,7 @@ fn emit_expr(
         Expr::Lit(Int(i)) => (format!("{}", i), LlvmType::I64Signed),
         Expr::Lit(Float(f)) => (format!("{:.6e}", f), LlvmType::Double),
         Expr::Lit(Bool(b)) => (format!("{}", *b as i32), LlvmType::I1),
-        Expr::Lit(Char(c)) => (format!("{}", *c as i32), LlvmType::I8),
+        Expr::Lit(Char(c)) => (format!("{}", *c as i32), LlvmType::Char),
         Expr::Lit(Str(s)) => {
             let b = s.len() + 1;
             let si = state.next_str_idx();
@@ -356,7 +356,7 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
         Expr::Lit(Lit::Int(_)) => LlvmType::I64Signed,
         Expr::Lit(Lit::Float(_)) => LlvmType::Double,
         Expr::Lit(Lit::Bool(_)) => LlvmType::I1,
-        Expr::Lit(Lit::Char(_)) => LlvmType::I8,
+        Expr::Lit(Lit::Char(_)) => LlvmType::Char,
         Expr::Lit(Lit::Str(_)) => LlvmType::I8Ptr,
 
         Expr::Var(name) => {
