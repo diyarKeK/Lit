@@ -6,6 +6,7 @@ pub enum Lit {
     Int(i64),      // literal signed 64-bit integer
     Float(f64),    // literal 64-bit number with floating point
     Bool(bool),    // literal boolean: `true` or `false`
+    Char(char),
     Str(String),   // literal string
 }
 
@@ -16,6 +17,7 @@ impl fmt::Display for Lit {
             Lit::Int(i) => write!(f, "Int({})", i),
             Lit::Float(fl) => write!(f, "Float({})", fl),
             Lit::Bool(b) => write!(f, "Bool({})", b),
+            Lit::Char(c) => write!(f, "Char('{}')", c),
             Lit::Str(s) => write!(f, "Str(\"{}\")", s),
         }
     }
