@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use super::utils;
 use super::LlvmType;
 use super::FuncCtx;
 use super::EmitState;
@@ -30,7 +31,7 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
         let b = s.len() + 1;
         out.push_str(&format!(
            "@str.{fn_name}.{i} = private unnamed_addr constant [{b} x i8] c\"{esc}\\00\"\n",
-            fn_name = func.name, i = i, b = b, esc = escape_llvm(s),
+            fn_name = func.name, i = i, b = b, esc = utils::escape_llvm(s),
         ));
     }
 
@@ -38,7 +39,7 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
         let b = fmt.len() + 1;
         out.push_str(&format!(
             "@fmt.{fn_name}.{i} = private unnamed_addr constant [{b} x i8] c\"{esc}\\00\"\n",
-            fn_name = func.name, i = i, b = b, esc = escape_llvm(fmt),
+            fn_name = func.name, i = i, b = b, esc = utils::escape_llvm(fmt),
         ));
     }
     out.push('\n');
@@ -334,17 +335,6 @@ fn llvm_instr_for_cast(from: &LlvmType, to: &LlvmType) -> &'static str {
 
         _ => unreachable!(),
     }
-}
-
-fn escape_llvm(s: &str) -> String {
-    s.chars().flat_map(|c| {
-        let b = c as u32;
-        if b == b'"' as u32 || b == b'\\' as u32 || b < 0x20 || b > 0x7e {
-            format!("\\{:02X}", b).chars().collect::<Vec<_>>()
-        } else {
-            vec![c]
-        }
-    }).collect()
 }
 
 pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String, Type>) -> LlvmType {
