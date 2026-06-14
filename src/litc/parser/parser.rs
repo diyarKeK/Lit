@@ -307,6 +307,7 @@ impl Parser {
                     TokenKind::Int => Type::Int,
                     TokenKind::Float => Type::Float,
                     TokenKind::Bool => Type::Bool,
+                    TokenKind::Char => Type::Char,
                     TokenKind::Str => Type::Str,
 
                     other => generate_error!("Expected type after keyword `as`, but got: `{}`", other),
