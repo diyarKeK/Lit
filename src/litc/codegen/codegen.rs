@@ -323,6 +323,8 @@ fn llvm_instr_and_literal_for_unary_operator_by_type(op: &UnaryOp, llvm_type: &L
 
 fn llvm_instr_for_cast(from: &LlvmType, to: &LlvmType) -> &'static str {
     match (from, to) {
+        (a, b) if *a == *b => "",
+
         (LlvmType::I64Unsigned, LlvmType::I64Signed) |
         (LlvmType::I64Signed, LlvmType::I64Unsigned)
         => "",
