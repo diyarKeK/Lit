@@ -14,6 +14,9 @@ pub fn generate(program: Program) -> String {
     out.push_str("declare i32 @puts(i8* nocapture)\n");
     out.push_str("declare i32 @printf(i8*, ...)\n\n");
 
+    out.push_str("@fmt.u64 = private unnamed_addr constant [6 x i8] c\"%llu\\0A\\00\"\n");
+    out.push_str("@fmt.i64 = private unnamed_addr constant [6 x i8] c\"%lld\\0A\\00\"\n");
+    out.push_str("@fmt.f64 = private unnamed_addr constant [4 x i8] c\"%g\\0A\\00\"\n");
     out.push_str("@bool.true  = private unnamed_addr constant [5 x i8] c\"true\\00\"\n");
     out.push_str("@bool.false = private unnamed_addr constant [6 x i8] c\"false\\00\"\n\n");
 
@@ -32,14 +35,6 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
         out.push_str(&format!(
            "@str.{fn_name}.{i} = private unnamed_addr constant [{b} x i8] c\"{esc}\\00\"\n",
             fn_name = func.name, i = i, b = b, esc = utils::escape_llvm(s),
-        ));
-    }
-
-    for (i, fmt) in ctx.get_num_fmts().iter().enumerate() {
-        let b = fmt.len() + 1;
-        out.push_str(&format!(
-            "@fmt.{fn_name}.{i} = private unnamed_addr constant [{b} x i8] c\"{esc}\\00\"\n",
-            fn_name = func.name, i = i, b = b, esc = utils::escape_llvm(fmt),
         ));
     }
     out.push('\n');
@@ -93,20 +88,42 @@ fn emit_println(
     let val = emit_expr(out, arena, expr_id, fn_name, ctx, state).0;
 
     match _type {
-        LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::Double => {
-            let fi = state.next_fmt_idx();
-            let fmt = &ctx.get_num_fmts()[fi];
-            let fb = fmt.len() + 1;
+        LlvmType::I64Unsigned => {
             let rf = state.next_reg();
-            let llvm_type = _type.get_alloca_type();
 
             out.push_str(&format!(
-                "  %r{rf} = getelementptr inbounds [{fb} x i8], [{fb} x i8]* @fmt.{fn_name}.{fi}, i32 0, i32 0\n",
-                rf = rf, fb = fb, fn_name = fn_name, fi = fi,
+                "  %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @fmt.u64, i32 0, i32 0\n",
+                rf = rf,
             ));
             out.push_str(&format!(
-                "  call i32 (i8*, ...) @printf(i8* %r{rf}, {_type} {val})\n",
-                rf = rf, _type = llvm_type, val = val
+                "  call i32 (i8*, ...) @printf(i8* %r{rf}, i64 {val})\n",
+                rf = rf, val = val
+            ));
+        }
+
+        LlvmType::I64Signed => {
+            let rf = state.next_reg();
+
+            out.push_str(&format!(
+                "  %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @fmt.i64, i32 0, i32 0\n",
+                rf = rf,
+            ));
+            out.push_str(&format!(
+                "  call i32 (i8*, ...) @printf(i8* %r{rf}, i64 {val})\n",
+                rf = rf, val = val
+            ));
+        }
+
+        LlvmType::Double => {
+            let rf = state.next_reg();
+
+            out.push_str(&format!(
+                "  %r{rf} = getelementptr inbounds [4 x i8], [4 x i8]* @fmt.f64, i32 0, i32 0\n",
+                rf = rf,
+            ));
+            out.push_str(&format!(
+                "  call i32 (i8*, ...) @printf(i8* %r{rf}, double {val})\n",
+                rf = rf, val = val
             ));
         }
 
