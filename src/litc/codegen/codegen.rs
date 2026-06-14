@@ -335,6 +335,10 @@ fn llvm_instr_for_cast(from: &LlvmType, to: &LlvmType) -> &'static str {
         (LlvmType::Double, LlvmType::I64Unsigned) => "fptoui",
         (LlvmType::Double, LlvmType::I64Signed) => "fptosi",
 
+        (LlvmType::I64Unsigned | LlvmType::I64Signed, LlvmType::Char) => "trunc",
+        (LlvmType::Char, LlvmType::I64Signed) => "sext",
+        (LlvmType::Char, LlvmType::I64Unsigned) => "zext",
+
         _ => unreachable!(),
     }
 }
