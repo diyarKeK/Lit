@@ -138,11 +138,17 @@ impl<'a> Analyzer<'a> {
             Expr::Cast { expr, to } => {
                 let expr_ty = self.infer_type(*expr);
 
-                if !expr_ty.is_num_type() {
+                if !expr_ty.is_num_type() && expr_ty != Type::Char {
                     generate_error!("Cannot cast {} to type `{}`", expr_ty, to);
                 }
 
-                if !to.is_num_type() {
+                if (expr_ty == Type::Char && *to == Type::Float) ||
+                    (expr_ty == Type::Float && *to == Type::Char)
+                {
+                    generate_error!("Cannot cast {} to type `{}`", expr_ty, to);
+                }
+
+                if !to.is_num_type() && *to != Type::Char {
                     generate_error!("Cannot cast anything to type `{}`", to);
                 }
 
