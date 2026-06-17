@@ -124,6 +124,10 @@ impl Lexer {
                         continue;
                     }
 
+                    if c == '\n' {
+                        generate_error!("Unterminated string literal");
+                    }
+                    
                     if c == q {
                         self.scroll();
                         break;
