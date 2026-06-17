@@ -16,7 +16,7 @@ module Vec {
 }
 
 class Vec<T> : Formatter {
-    T buf;
+    T[] buf;
     unt capacity;
     unt pos;
 
