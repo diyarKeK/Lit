@@ -1,3 +1,6 @@
+#[allow(non_upper_case_globals, dead_code)]
+static mut error_quantity: u32 = 0;
+
 #[macro_export]
 macro_rules! generate_error {
     ($($arg:tt)*) => {{

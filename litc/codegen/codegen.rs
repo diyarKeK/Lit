@@ -9,16 +9,17 @@ use crate::ast::*;
 pub fn generate(program: Program) -> String {
     let mut out = String::new();
 
-    out.push_str("; Lit compiler v1 - generated LLVM IR\n\n");
-    out.push_str("declare i32 @putchar(i32)\n");
-    out.push_str("declare i32 @puts(i8* nocapture)\n");
-    out.push_str("declare i32 @printf(i8*, ...)\n\n");
-
-    out.push_str("@fmt.u64 = private unnamed_addr constant [6 x i8] c\"%llu\\0A\\00\"\n");
-    out.push_str("@fmt.i64 = private unnamed_addr constant [6 x i8] c\"%lld\\0A\\00\"\n");
-    out.push_str("@fmt.f64 = private unnamed_addr constant [4 x i8] c\"%g\\0A\\00\"\n");
-    out.push_str("@bool.true  = private unnamed_addr constant [5 x i8] c\"true\\00\"\n");
-    out.push_str("@bool.false = private unnamed_addr constant [6 x i8] c\"false\\00\"\n\n");
+    out.push_str("\
+        ; Lit compiler v1 - generated LLVM IR\n\n\
+        declare i32 @putchar(i32)\n\
+        declare i32 @puts(i8* nocapture)\n\
+        declare i32 @printf(i8*, ...)\n\n\
+        @fmt.u64 = private unnamed_addr constant [6 x i8] c\"%llu\\0A\\00\"\n\
+        @fmt.i64 = private unnamed_addr constant [6 x i8] c\"%lld\\0A\\00\"\n\
+        @fmt.f64 = private unnamed_addr constant [4 x i8] c\"%g\\0A\\00\"\n\
+        @bool.true = private unnamed_addr constant [5 x i8] c\"true\\00\"\n\
+        @bool.false = private unnamed_addr constant [6 x i8] c\"false\\00\"\n\n\
+    ");
 
     for func in &program.funcs {
         emit_func(&mut out, func, &program.expr_arena);
@@ -40,7 +41,6 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
     out.push('\n');
 
     out.push_str(&format!("define i32 @{}() {{\n", func.name));
-    out.push_str("entry:\n");
 
     let mut state = EmitState::new();
 
@@ -51,8 +51,10 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
         }
     }
 
-    out.push_str("  ret i32 0\n");
-    out.push_str("}\n\n");
+    out.push_str("  \
+            ret i32 0\n\
+        }\n\n\
+    ");
 }
 
 fn emit_vardecl(
@@ -89,60 +91,36 @@ fn emit_println(
 
     match _type {
         LlvmType::I64Unsigned => {
-            let rf = state.next_reg();
+            let reg = state.next_reg();
 
-            out.push_str(&format!(
-                "  %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @fmt.u64, i32 0, i32 0\n",
-                rf = rf,
-            ));
-            out.push_str(&format!(
-                "  call i32 (i8*, ...) @printf(i8* %r{rf}, i64 {val})\n",
-                rf = rf, val = val
+            out.push_str(&format!("  \
+                   %r{reg} = getelementptr inbounds [6 x i8], [6 x i8]* @fmt.u64, i32 0, i32 0\n  \
+                   call i32 (i8*, ...) @printf(i8* %r{reg}, i64 {val})\n\
+                ",
+                reg = reg, val = val
             ));
         }
 
         LlvmType::I64Signed => {
-            let rf = state.next_reg();
+            let reg = state.next_reg();
 
-            out.push_str(&format!(
-                "  %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @fmt.i64, i32 0, i32 0\n",
-                rf = rf,
-            ));
-            out.push_str(&format!(
-                "  call i32 (i8*, ...) @printf(i8* %r{rf}, i64 {val})\n",
-                rf = rf, val = val
+            out.push_str(&format!("  \
+                   %r{reg} = getelementptr inbounds [6 x i8], [6 x i8]* @fmt.i64, i32 0, i32 0\n  \
+                   call i32 (i8*, ...) @printf(i8* %r{reg}, i64 {val})\n\
+                ",
+                reg = reg, val = val
             ));
         }
 
         LlvmType::Double => {
-            let rf = state.next_reg();
+            let reg = state.next_reg();
 
-            out.push_str(&format!(
-                "  %r{rf} = getelementptr inbounds [4 x i8], [4 x i8]* @fmt.f64, i32 0, i32 0\n",
-                rf = rf,
+            out.push_str(&format!("  \
+                   %r{reg} = getelementptr inbounds [4 x i8], [4 x i8]* @fmt.f64, i32 0, i32 0\n  \
+                   call i32 (i8*, ...) @printf(i8* %r{reg}, double {val})\n\
+                ",
+                reg = reg, val = val
             ));
-            out.push_str(&format!(
-                "  call i32 (i8*, ...) @printf(i8* %r{rf}, double {val})\n",
-                rf = rf, val = val
-            ));
-        }
-
-        LlvmType::Char => {
-            let rs = state.next_reg();
-
-            out.push_str(&format!(
-                "  %r{rs} = zext i8 {val} to i32\n",
-                rs = rs, val = val,
-            ));
-
-            out.push_str(&format!(
-                "  call i32 @putchar(i32 %r{rs})\n",
-                rs = rs,
-            ));
-
-            out.push_str(
-                "  call i32 @putchar(i32 10)\n",
-            );
         }
 
         LlvmType::I1 => {
@@ -150,28 +128,37 @@ fn emit_println(
             let rf = state.next_reg();
             let rs = state.next_reg();
 
-            out.push_str(&format!(
-                "  %r{rt} = getelementptr inbounds [5 x i8], [5 x i8]* @bool.true, i32 0, i32 0\n",
-                rt = rt,
+            out.push_str(&format!("  \
+                   %r{rt} = getelementptr inbounds [5 x i8], [5 x i8]* @bool.true, i32 0, i32 0\n  \
+                   %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @bool.false, i32 0, i32 0\n  \
+                   %r{rs} = select i1 {val}, i8* %r{rt}, i8* %r{rf}\n  \
+                   call i32 @puts(i8* %r{rs})\n\
+                ",
+                                  rt = rt, rf = rf, rs = rs, val = val
             ));
-            out.push_str(&format!(
-                "  %r{rf} = getelementptr inbounds [6 x i8], [6 x i8]* @bool.false, i32 0, i32 0\n",
-                rf = rf,
+        }
+
+        LlvmType::Char => {
+            let rs = state.next_reg();
+
+            out.push_str(&format!("  \
+                   %r{rs} = zext i8 {val} to i32\n  \
+                   call i32 @putchar(i32 %r{rs})\n  \
+                   call i32 @putchar(i32 10)\n\
+                ",
+                rs = rs, val = val,
             ));
-            out.push_str(&format!(
-                "  %r{rs} = select i1 {val}, i8* %r{rt}, i8* %r{rf}\n",
-                rs = rs, val = val, rt = rt, rf = rf,
-            ));
-            out.push_str(&format!("  call i32 @puts(i8* %r{rs})\n", rs = rs));
         }
 
         LlvmType::I8Ptr => {
-            out.push_str(&format!("  call i32 @puts(i8* {val})\n", val = val));
+            out.push_str(&format!(
+                "  call i32 @puts(i8* {val})\n",
+                val = val
+            ));
         }
     }
 }
 
-#[allow(clippy::needless_return)]
 fn emit_expr(
     out: &mut String,
     arena: &ExprArena,
@@ -185,11 +172,11 @@ fn emit_expr(
 
     use Lit::*;
     match expr {
-        Expr::Lit(Unt(u)) => (format!("{}", *u as i64), LlvmType::I64Unsigned),
-        Expr::Lit(Int(i)) => (format!("{}", i), LlvmType::I64Signed),
+        Expr::Lit(Unt(u)) =>  ((*u as i64).to_string(), LlvmType::I64Unsigned),
+        Expr::Lit(Int(i)) => (i.to_string(), LlvmType::I64Signed),
         Expr::Lit(Float(f)) => (format!("{:.6e}", f), LlvmType::Double),
-        Expr::Lit(Bool(b)) => (format!("{}", *b as i32), LlvmType::I1),
-        Expr::Lit(Char(c)) => (format!("{}", *c as i32), LlvmType::Char),
+        Expr::Lit(Bool(b)) => ((*b as i32).to_string(), LlvmType::I1),
+        Expr::Lit(Char(c)) => ((*c as i32).to_string(), LlvmType::Char),
         Expr::Lit(Str(s)) => {
             let b = s.len() + 1;
             let si = state.next_str_idx();
@@ -227,14 +214,13 @@ fn emit_expr(
                 reg = reg, instr = instr, _type = llvm_type, l_value = l_value, r_value = r_value,
             ));
 
-            return (
-                format!("%r{}", reg),
-                if op.is_comparison() || op.is_arranging() {
-                    LlvmType::I1
-                } else {
-                    l_type
-                }
-            );
+            let final_type = if op.is_comparison() || op.is_arranging() {
+                LlvmType::I1
+            } else {
+                l_type
+            };
+
+            (format!("%r{}", reg), final_type)
         }
 
         Expr::Unary { op, expr } => {
