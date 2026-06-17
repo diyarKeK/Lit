@@ -1,3 +1,4 @@
+import lib::panic;
 import fmt::Formatter;
 
 enum Option<T> : Formatter {
