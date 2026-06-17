@@ -1,8 +1,22 @@
 import fmt::Formatter;
 import str::String;
 
+module Vec {
+    fun <T> new(): Vec<T> {
+        return Vec<T>(8);
+    }
+
+    fun <T> of(T... elems): Vec<T> {
+        return Vec<T>(elems);
+    }
+
+    fun <T> with_capacity(unt init_capacity): Vec<T> {
+        return Vec<T>(init_capacity);
+    }
+}
+
 class Vec<T> : Formatter {
-    T[] buf;
+    T buf;
     unt capacity;
     unt pos;
 
@@ -87,19 +101,5 @@ class Vec<T> : Formatter {
         builder.push(']');
 
         return builder.to_str();
-    }
-}
-
-module Vec {
-    fun <T> new(): Vec<T> {
-        return Vec<T>(8);
-    }
-
-    fun <T> of(T... elems): Vec<T> {
-        return Vec<T>(elems);
-    }
-
-    fun <T> with_capacity(unt init_capacity): Vec<T> {
-        return Vec<T>(init_capacity);
     }
 }
