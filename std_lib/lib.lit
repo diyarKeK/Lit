@@ -1,0 +1,33 @@
+import str::FromStr;
+
+fun println() {
+    print("\n")
+}
+
+fun println(str msg) {
+    print(msg + "\n");
+}
+
+fun print(str msg) {
+    unt len = msg.len;
+    llvm {
+        %r.0 = getelementptr inbounds [$len x i8], [$len x i8]* $msg, i32 0, i32 0
+        call i32 @puts(i8* %r.0)
+    }
+}
+
+fun <T : FromStr> input(str msg): T {
+
+}
+
+fun panic(str msg) {
+    println(msg);
+    exit(1);
+}
+
+fun exit(i32 code) {
+    llvm {
+        call void @exit(i32 $code)
+        unreachable
+    }
+}
