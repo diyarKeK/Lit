@@ -1,31 +1,32 @@
-import strings::[Formatter, String];
+import fmt::Formatter;
+import str::String;
 
 class Vec<T> : Formatter {
-    T[] data;
+    T[] buf;
     unt capacity;
     unt pos;
 
     <T> Vec(unt init_capacity) {
-        self.data = T[init_capacity];
+        self.buf = T[init_capacity];
         self.capacity = init_capacity;
         self.pos = 0;
     }
 
     <T> Vec(T[] arr) {
-        self.data = arr;
+        self.buf = arr;
         self.capacity = arr.len;
         self.pos = 0;
     }
 
     fun grow() {
         self.capacity *= 2;
-        T[] new_data = T[self.capacity];
+        T[] new_buf = T[self.capacity];
 
-        for el, i in self.data {
-            new_data[i] = el;
+        for i, el in self.buf {
+            new_buf[i] = el;
         }
 
-        self.data = new_data;
+        self.buf = new_buf;
     }
 
     fun push(T val) {
@@ -33,17 +34,25 @@ class Vec<T> : Formatter {
             self.grow();
         }
 
-        self.data[self.pos] = val;
+        self.buf[self.pos] = val;
         self.pos += 1;
     }
 
     fun pop(): T {
-        self.data[self.pos] = null;
+        T val = self.buf[self.pos];
+
+        self.buf[self.pos] = null;
         self.pos -= 1;
+
+        return val;
+    }
+
+    fun first(): T {
+        return self.buf[0];
     }
 
     fun last(): T {
-        return self.data[self.capacity];
+        return self.buf[self.pos];
     }
 
     #[T : Formatter]
@@ -54,7 +63,7 @@ class Vec<T> : Formatter {
 
         for unt i = 0, i < self.capacity - 1, i++ {
 
-            T el = self.data[i];
+            T el = self.buf[i];
 
             builder.push_str(el.fmt());
             builder.push(', ');

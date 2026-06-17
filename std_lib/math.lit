@@ -1,2 +1,4 @@
-const pi = 3.141592
-const e = 2.718281
+module Math {
+    const int pi = 3.141592
+    const int e = 2.718281
+}

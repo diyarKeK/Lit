@@ -1,3 +1,15 @@
+import vec::Vec;
+
+module String {
+    fun new(): String {
+        return String();
+    }
+
+    fun with_capacity(unt init_capacity): String {
+        return String(init_capacity);
+    }
+}
+
 class String {
     Vec<u8> chars;
 
@@ -9,17 +21,52 @@ class String {
         self.chars = Vec::with_capacity(init_capacity);
     }
 
+    fun push(char c) {
+        chars.push(c as u8);
+    }
+
+    fun pop(): char {
+        return chars.pop() as char;
+    }
+
     fun to_str(): str {
 
     }
 }
 
-module String {
-    fun new(): String {
-        return String();
+interface FromStr {
+    fun parse(str s): !FromStr;
+}
+
+impl FromStr {
+
+// TODO - implement method parse() for types: unt, int, float
+
+    $unt {
+        override fun parse(str s): !unt {
+            return 0;
+        }
     }
 
-    fun with_capacity(unt init_capacity): String {
-        return String(init_capacity);
+    $int {
+        override fun parse(str s): !int {
+            return 0;
+        }
+    }
+
+    $float {
+        override fun parse(str s): !float {
+            return 0.0;
+        }
+    }
+
+    $bool {
+        override fun parse(str s): !bool {
+            return switch s {
+                "true" => true,
+                "false" => false,
+                other => panic("Expected `true` or `false`, but got $other"),
+            }
+        }
     }
 }

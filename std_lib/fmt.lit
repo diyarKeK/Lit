@@ -1,4 +1,4 @@
-import std::str::String;
+import str::String;
 
 interface Formatter {
     fun fmt(): str;
@@ -6,21 +6,23 @@ interface Formatter {
 
 impl Formatter {
 
+// TODO - implement method fmt() for types: unt, int and float
+
     $unt {
         override fun fmt(): str {
-
+            return "";
         }
     }
 
     $int {
         override fun fmt(): str {
-
+            return "";
         }
     }
 
     $float {
         override fun fmt(): str {
-
+            return "";
         }
     }
 
