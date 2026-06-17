@@ -1,3 +1,4 @@
+import lib::panic;
 import vec::Vec;
 
 module String {
@@ -24,7 +25,7 @@ class String {
     fun push(char c) {
         self.chars.push(c as u8);
     }
-    
+
     fun push_str(str s) {
         self.chars.extend(s as u8[]);
     }
