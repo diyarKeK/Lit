@@ -22,11 +22,15 @@ class String {
     }
 
     fun push(char c) {
-        chars.push(c as u8);
+        self.chars.push(c as u8);
+    }
+    
+    fun push_str(str s) {
+        self.chars.extend(s as u8[]);
     }
 
     fun pop(): char {
-        return chars.pop() as char;
+        return self.chars.pop() as char;
     }
 
     fun to_str(): str {
