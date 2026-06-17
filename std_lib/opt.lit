@@ -1,0 +1,43 @@
+import fmt::Formatter;
+
+enum Option<T> : Formatter {
+    Some(T),
+    Null,
+
+    fun is_null(): bool {
+        return self == Null;
+    }
+
+    fun is_some(): bool {
+        return self == Some(_);
+    }
+
+    fun unwrap(): T {
+        return switch self {
+            Some(v) => v,
+            Null => panic("Null Pointer Exception"),
+        }
+    }
+
+    fun unwrap_or(T default): T {
+        return switch self {
+            Some(v) => v,
+            Null => default,
+        }
+    }
+
+    fun unwrap_or_else(lambda: () => T func): T {
+        return switch self {
+            Some(v) => v,
+            Null => func(),
+        }
+    }
+
+    #[T : Formatter]
+    override fun fmt(): str {
+        return switch self {
+            Some(v) => "Some($v)",
+            Null => "Null",
+        }
+    }
+}
