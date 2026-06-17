@@ -47,6 +47,20 @@ class Vec<T> : Formatter {
         return val;
     }
 
+    fun extend(T[] arr) {
+        while self.pos + arr.len >= self.capacity {
+            self.capacity *= 2;
+        }
+
+        T[] new_buf = T[self.capacity];
+
+        for i, el in self.buf {
+            new_buf[i] = el;
+        }
+
+        self.buf = new_buf;
+    }
+
     fun first(): T {
         return self.buf[0];
     }
