@@ -187,23 +187,23 @@ fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
 
         Expr::Var(name) => println!("{}${},", padding, name),
 
-        Expr::Binary { op, left, right } => {
-            println!("{}Binary {{", padding);
+        Expr::Binary (op, left, right) => {
+            println!("Binary {{");
             print_expr(expr_arena, *left, indent + 2);
             println!("{}  {},", padding, op);
             print_expr(expr_arena, *right, indent + 2);
             println!("{}}}", padding);
         }
 
-        Expr::Unary { op, expr } => {
-            println!("{}Unary {{", padding);
+        Expr::Unary (op, expr) => {
+            println!("Unary {{");
             println!("{}  {},", padding, op);
             print_expr(expr_arena, *expr, indent + 2);
             println!("{}}}", padding);
         }
 
-        Expr::Cast { expr, to } => {
-            println!("{}Cast {{", padding);
+        Expr::Cast (to, expr) => {
+            println!("Cast {{");
             print_expr(expr_arena, *expr, indent + 2);
             println!("{}  as {}", padding, to);
             println!("{}}}", padding);
@@ -221,20 +221,20 @@ fn print_ast(program: &Program) {
         match expr {
             Expr::Lit(lit) => println!("{}", lit),
             Expr::Var(name) => println!("Var({})", name),
-            Expr::Binary { op, left, right } => {
+            Expr::Binary (op, left, right) => {
                 println!("Binary {{");
                 println!("    op: {:?}", op);
                 println!("    left: {}", left);
                 println!("    right: {}", right);
                 println!("  }}");
             }
-            Expr::Unary { op, expr } => {
+            Expr::Unary (op, expr) => {
                 println!("Unary {{");
                 println!("    op: {:?}", op);
                 println!("    expr: {}", expr);
                 println!("  }}");
             }
-            Expr::Cast { expr, to } => {
+            Expr::Cast (to, expr) => {
                 println!("Cast {{");
                 println!("    expr: {}", expr);
                 println!("    to: {}", to);
@@ -243,21 +243,22 @@ fn print_ast(program: &Program) {
         }
     }
 
-    println!("Program:");
+    println!("Program:\n");
     for func in &program.funcs {
-        println!("  FuncDef: {}()", func.name);
+        println!("  FuncDef: {}():", func.name);
         for stmt in &func.body {
             match stmt {
                 Stmt::VarDecl(v) => {
                     let ty = format!("{:?}", v._type).to_lowercase();
                     print!("    VarDecl:  {} {} = ", ty, v.name);
-                    print_expr(&program.expr_arena, v.expr_id, 0);
+                    print_expr(&program.expr_arena, v.expr_id, 4);
                 }
                 Stmt::Println(arg) => {
-                    print!("    Println:  ");
-                    print_expr(&program.expr_arena, *arg, 0);
+                    print!("    Println: ");
+                    print_expr(&program.expr_arena, *arg, 4);
                 }
             }
         }
+        println!();
     }
 }

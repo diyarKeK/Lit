@@ -70,7 +70,7 @@ impl<'a> Analyzer<'a> {
                 }).clone()
             }
 
-            Expr::Binary { op, left, right } => {
+            Expr::Binary (op, left, right) => {
                 let left_ty = self.infer_type(*left);
                 let right_ty = self.infer_type(*right);
 
@@ -120,7 +120,7 @@ impl<'a> Analyzer<'a> {
                 }
             }
 
-            Expr::Unary { op, expr } => {
+            Expr::Unary (op, expr) => {
                 let expr_ty = self.infer_type(*expr);
 
                 if let UnaryOp::Minus = op && (expr_ty == Type::Int || expr_ty == Type::Float) {
@@ -135,7 +135,7 @@ impl<'a> Analyzer<'a> {
                 }
             }
 
-            Expr::Cast { expr, to } => {
+            Expr::Cast (to, expr) => {
                 let expr_ty = self.infer_type(*expr);
 
                 if !expr_ty.is_num_type() && expr_ty != Type::Char {

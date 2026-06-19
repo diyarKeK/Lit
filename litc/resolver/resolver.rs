@@ -62,7 +62,7 @@ impl<'a> Resolver<'a> {
                 (Expr::Var(name.clone()), ty)
             }
 
-            Expr::Binary { op, left, right } => {
+            Expr::Binary (op, left, right) => {
                 let (_, left_ty) = self.resolve_expr(left);
                 let (_, right_ty) = self.resolve_expr(right);
 
@@ -78,9 +78,9 @@ impl<'a> Resolver<'a> {
                             target_ty
                         };
 
-                        (Expr::Binary { op, left, right }, res_ty)
+                        (Expr::Binary(op, left, right), res_ty)
                     } else {
-                        (Expr::Binary { op, left, right }, Type::Unt)
+                        (Expr::Binary(op, left, right), Type::Unt)
                     }
                 } else {
                     let res_ty = if op.is_comparison() {
@@ -88,21 +88,21 @@ impl<'a> Resolver<'a> {
                     } else {
                         left_ty
                     };
-                    (Expr::Binary { op, left, right }, res_ty)
+                    (Expr::Binary(op, left, right), res_ty)
                 }
             }
 
-            Expr::Unary { op, expr } => {
+            Expr::Unary (op, expr) => {
                 let (_, inner_ty) = self.resolve_expr(expr);
 
                 if let UnaryOp::Minus = op && inner_ty == Type::Unt {
                     self.coerce_node_to(expr, &Type::Int);
                 }
 
-                (Expr::Unary { op, expr }, inner_ty)
+                (Expr::Unary(op, expr), inner_ty)
             }
             
-            Expr::Cast { expr, to } => {
+            Expr::Cast (to, expr) => {
                 self.resolve_expr(expr);
                 
                 // TODO: Хуйня, переделывай!
@@ -134,7 +134,7 @@ impl<'a> Resolver<'a> {
                     }
                 }*/
 
-                (Expr::Cast { expr, to: to.clone() }, to)
+                (Expr::Cast(to.clone(), expr), to)
             }
         };
 
@@ -157,12 +157,12 @@ impl<'a> Resolver<'a> {
                     node.expr = Expr::Lit(Lit::Float(*i as f64));
                 }
             }
-            Expr::Binary { op, left, right }
+            Expr::Binary (op, left, right)
                 if op.is_arithmetic() || op.is_logical() || op.is_bitwise() => {
                 self.coerce_node_to(*left, target);
                 self.coerce_node_to(*right, target);
             }
-            Expr::Unary { expr, .. } => {
+            Expr::Unary (_, expr) => {
                 self.coerce_node_to(*expr, target);
             }
             _ => {}

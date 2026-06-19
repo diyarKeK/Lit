@@ -22,9 +22,19 @@ impl Parser {
     fn peek(&self) -> &Token {
         self.tokens.get(self.pos).unwrap()
     }
+    
+    #[allow(dead_code)]
+    fn peek_with_offset(&self, offset: usize) -> &Token {
+        self.tokens.get(self.pos + offset).unwrap()
+    }
 
     fn scroll(&mut self) {
         self.pos += 1;
+    }
+
+    #[allow(dead_code)]
+    fn scroll_with_offset(&mut self, offset: usize) {
+        self.pos += offset;
     }
 
     fn advance(&mut self) -> Token {
@@ -142,7 +152,7 @@ impl Parser {
 
         self.expr_arena.add(
             ExprNode::new(
-                Expr::Binary { op, left, right },
+                Expr::Binary(op, left, right),
                 Span::new(start, end),
             )
         )
@@ -317,7 +327,7 @@ impl Parser {
                 let end = type_token.span.end;
 
                 expr = self.expr_arena.add(ExprNode::new(
-                    Expr::Cast { expr, to: to_type },
+                    Expr::Cast(to_type, expr),
                     Span::new(start, end),
                 ));
             } else {
@@ -363,10 +373,7 @@ impl Parser {
                         let end = self.expr_arena.get(expr).span.end;
 
                         self.expr_arena.add(ExprNode::new(
-                            Expr::Unary {
-                                op: UnaryOp::Minus,
-                                expr,
-                            },
+                            Expr::Unary(UnaryOp::Minus, expr),
                             Span::new(start, end),
                         ))
                     }
@@ -383,10 +390,7 @@ impl Parser {
                 let end = self.expr_arena.get(expr).span.end;
 
                 self.expr_arena.add(ExprNode::new(
-                    Expr::Unary {
-                        op: UnaryOp::Not,
-                        expr,
-                    },
+                    Expr::Unary(UnaryOp::Not, expr),
                     Span::new(start, end),
                 ))
             }

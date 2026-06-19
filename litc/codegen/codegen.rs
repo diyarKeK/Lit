@@ -201,7 +201,7 @@ fn emit_expr(
             (format!("%r{}", reg), _type)
         }
 
-        Expr::Binary { op, left, right } => {
+        Expr::Binary (op, left, right) => {
             let (l_value, l_type) = emit_expr(out, arena, *left, fn_name, ctx, state);
             let (r_value, _) = emit_expr(out, arena, *right, fn_name, ctx, state);
 
@@ -223,7 +223,7 @@ fn emit_expr(
             (format!("%r{}", reg), final_type)
         }
 
-        Expr::Unary { op, expr } => {
+        Expr::Unary (op, expr) => {
             let (value, _type) = emit_expr(out, arena, *expr, fn_name, ctx, state);
 
             let (instr, literal) = llvm_instr_and_literal_for_unary_operator_by_type(op, &_type);
@@ -238,7 +238,7 @@ fn emit_expr(
             (format!("%r{}", reg), _type)
         }
 
-        Expr::Cast { expr, to } => {
+        Expr::Cast (to, expr) => {
             let (value, from_type) = emit_expr(out, arena, *expr, fn_name, ctx, state);
 
             let to_type = LlvmType::from(to);
@@ -362,7 +362,7 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
             LlvmType::from(var_types.get(name).unwrap())
         }
 
-        Expr::Binary { op, left, .. } => {
+        Expr::Binary (op, left, _) => {
             if op.is_comparison() || op.is_arranging() {
                 LlvmType::I1
             } else {
@@ -370,8 +370,8 @@ pub fn infer_llvm_type(arena: &ExprArena, id: ExprId, var_types: &HashMap<String
             }
         },
 
-        Expr::Unary { expr, .. } => infer_llvm_type(arena, *expr, var_types),
+        Expr::Unary (_, expr) => infer_llvm_type(arena, *expr, var_types),
 
-        Expr::Cast { to, .. } => LlvmType::from(to),
+        Expr::Cast (to, _) => LlvmType::from(to),
     }
 }
