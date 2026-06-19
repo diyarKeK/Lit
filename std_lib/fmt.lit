@@ -1,7 +1,7 @@
 import str::String;
 
 interface Formatter {
-    fun fmt(): str;
+    fun fmt(self): str;
 }
 
 impl Formatter {
@@ -9,25 +9,25 @@ impl Formatter {
 // TODO - implement method fmt() for types: unt, int and float
 
     $unt {
-        override fun fmt(): str {
+        override fun fmt(self): str {
             return "";
         }
     }
 
     $int {
-        override fun fmt(): str {
+        override fun fmt(self): str {
             return "";
         }
     }
 
     $float {
-        override fun fmt(): str {
+        override fun fmt(self): str {
             return "";
         }
     }
 
     $bool {
-        override fun fmt(): str {
+        override fun fmt(self): str {
             return switch self {
                 true => "true",
                 false => "false",
@@ -36,7 +36,7 @@ impl Formatter {
     }
 
     $str {
-        override fun fmt(): str {
+        override fun fmt(self): str {
             return self;
         }
     }
