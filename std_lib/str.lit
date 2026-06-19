@@ -1,6 +1,12 @@
 import lib::panic;
 import vec::Vec;
 
+impl $str {
+    fun <T : FromStr> parse(): T {
+        return T::parse(self);
+    }
+}
+
 module String {
     fun new(): String {
         return String();
