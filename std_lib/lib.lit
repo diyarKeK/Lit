@@ -1,5 +1,14 @@
 import str::FromStr;
 
+llvm {
+    declare i32 @puts(i8*)
+    declare i64 @getline(i8**, i64*, i8*)
+    declare void @exit(i32)
+    declare void @free(i8*)
+
+    @stdin = external global i8*
+}
+
 fun println() {
     print("\n")
 }
@@ -17,7 +26,25 @@ fun print(str msg) {
 }
 
 fun <T : FromStr> input(str msg): T {
+    str input = input(msg);
+    return input.parse<T>();
+}
 
+fun input(str msg): str {
+    print(msg);
+    return input();
+}
+
+fun input(): str {
+    i8* line_ptr = null;
+    int n_ptr = 0;
+
+    llvm {
+        %.stdin = load i8*, i8** @stdin
+        call i64 @getline(i8** %line_ptr_ptr, i64* %n_ptr, i8* %.stdin)
+    }
+
+    return line_ptr as str;
 }
 
 fun panic(str msg) {
