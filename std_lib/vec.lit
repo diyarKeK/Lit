@@ -72,6 +72,10 @@ class Vec<T> : Formatter {
             new_buf[i] = el;
         }
 
+        for i, el in arr {
+            new_buf[i + self.capacity] = el
+        }
+
         self.buf = new_buf;
     }
 
