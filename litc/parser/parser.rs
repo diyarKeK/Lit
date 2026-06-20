@@ -119,11 +119,27 @@ impl Parser {
         self.scroll();
         self.expect(TokenKind::LParen);
 
+        if self.peek().kind == TokenKind::RParen {
+            return self.parse_println_no_value();
+        }
+
         let arg = self.parse_expr();
 
         self.expect(TokenKind::RParen);
 
         arg
+    }
+
+    fn parse_println_no_value(&mut self) -> ExprId {
+        let start = self.peek().span.start;
+        let end = self.peek().span.end;
+
+        self.scroll();
+
+        self.expr_arena.add(ExprNode::new(
+            Expr::Lit(Lit::Str(String::new())),
+            Span::new(start, end),
+        ))
     }
 
     fn parse_vardecl(&mut self) -> VarDecl {
