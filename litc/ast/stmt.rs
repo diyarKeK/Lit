@@ -5,4 +5,5 @@ use super::var_decl::VarDecl;
 pub enum Stmt {
     VarDecl(VarDecl),    // `<type> <name> = <expression>`
     Println(ExprId),     // `println()`
+    Unreachable,         // `unreachable`
 }
