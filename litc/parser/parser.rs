@@ -89,9 +89,9 @@ impl Parser {
 
         self.expect(TokenKind::RBrace);
 
-        let block = Block::new(stmts);
+        let body = Block::new(stmts);
 
-        FuncDef { name, body: block }
+        FuncDef { name, body }
     }
 
     fn parse_stmt(&mut self) -> Stmt {
@@ -112,8 +112,6 @@ impl Parser {
             other => generate_error!("Parse error: unknown statement starting with `{}`", other),
         };
 
-        self.expect(TokenKind::Semicolon);
-
         stmt
     }
 
@@ -125,11 +123,12 @@ impl Parser {
             return self.parse_println_no_value();
         }
 
-        let arg = self.parse_expr();
+        let expr_id = self.parse_expr();
 
         self.expect(TokenKind::RParen);
+        self.expect(TokenKind::Semicolon);
 
-        arg
+        expr_id
     }
 
     fn parse_println_no_value(&mut self) -> ExprId {
@@ -137,6 +136,7 @@ impl Parser {
         let end = self.peek().span.end;
 
         self.scroll();
+        self.expect(TokenKind::Semicolon);
 
         self.expr_arena.add(ExprNode::new(
             Expr::Lit(Lit::Str(String::new())),
@@ -165,6 +165,8 @@ impl Parser {
         self.expect(TokenKind::Assign);
 
         let expr_id = self.parse_expr();
+
+        self.expect(TokenKind::Semicolon);
 
         VarDecl { _type, name, expr_id }
     }
