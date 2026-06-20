@@ -257,6 +257,9 @@ fn print_ast(program: &Program) {
                     print!("    Println: ");
                     print_expr(&program.expr_arena, *arg, 4);
                 }
+                Stmt::Unreachable => {
+                    println!("    Unreachable");
+                }
             }
         }
         println!();
