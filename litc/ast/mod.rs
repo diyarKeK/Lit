@@ -9,9 +9,11 @@ mod ty;
 mod lit;
 mod un_op;
 mod expr_node;
+mod block;
 
 pub use program::Program;
 pub use func_def::FuncDef;
+pub use block::Block;
 pub use expr_arena::ExprArena;
 pub use expr_arena::ExprId;
 pub use stmt::Stmt;
