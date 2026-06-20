@@ -98,6 +98,11 @@ impl Parser {
                 Stmt::VarDecl(self.parse_vardecl())
             }
 
+            TokenKind::Unreachable => {
+                self.scroll();
+                Stmt::Unreachable
+            },
+
             TokenKind::Ident(name) if name == "println" => {
                 Stmt::Println(self.parse_println())
             },
