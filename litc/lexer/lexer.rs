@@ -193,8 +193,8 @@ impl Lexer {
 
                 match word.as_str() {
                     "fun" => TokenKind::Fun,
-                    "as" => TokenKind::As,
                     "unreachable" => TokenKind::Unreachable,
+                    "as" => TokenKind::As,
                     "unt" => TokenKind::Unt,
                     "int" => TokenKind::Int,
                     "float" => TokenKind::Float,
