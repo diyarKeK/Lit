@@ -188,7 +188,7 @@ fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
         Expr::Var(name) => println!("{}${},", padding, name),
 
         Expr::Binary (op, left, right) => {
-            println!("Binary {{");
+            println!("{}Binary {{", padding);
             print_expr(expr_arena, *left, indent + 2);
             println!("{}  {},", padding, op);
             print_expr(expr_arena, *right, indent + 2);
@@ -196,17 +196,34 @@ fn print_expr(expr_arena: &ExprArena, expr_id: ExprId, indent: usize) {
         }
 
         Expr::Unary (op, expr) => {
-            println!("Unary {{");
+            println!("{}Unary {{", padding);
             println!("{}  {},", padding, op);
             print_expr(expr_arena, *expr, indent + 2);
             println!("{}}}", padding);
         }
 
         Expr::Cast (to, expr) => {
-            println!("Cast {{");
+            println!("{}Cast {{", padding);
             print_expr(expr_arena, *expr, indent + 2);
             println!("{}  as {}", padding, to);
             println!("{}}}", padding);
+        }
+    }
+}
+
+fn print_stmt(expr_arena: &ExprArena, stmt: &Stmt, indent: usize) {
+    let padding = " ".repeat(indent);
+    match stmt {
+        Stmt::VarDecl(v) => {
+            print!("{}VarDecl:  {} {} = ", padding, v._type, v.name);
+            print_expr(expr_arena, v.expr_id, indent);
+        }
+        Stmt::Println(arg) => {
+            print!("{}Println: ", padding);
+            print_expr(expr_arena, *arg, indent);
+        }
+        Stmt::Unreachable => {
+            println!("{}Unreachable", padding);
         }
     }
 }
@@ -247,20 +264,7 @@ fn print_ast(program: &Program) {
     for func in &program.funcs {
         println!("  FuncDef: {}():", func.name);
         for stmt in func.body.stmts() {
-            match stmt {
-                Stmt::VarDecl(v) => {
-                    let ty = format!("{:?}", v._type).to_lowercase();
-                    print!("    VarDecl:  {} {} = ", ty, v.name);
-                    print_expr(&program.expr_arena, v.expr_id, 4);
-                }
-                Stmt::Println(arg) => {
-                    print!("    Println: ");
-                    print_expr(&program.expr_arena, *arg, 4);
-                }
-                Stmt::Unreachable => {
-                    println!("    Unreachable");
-                }
-            }
+            print_stmt(&program.expr_arena, stmt, 4);
         }
         println!();
     }
