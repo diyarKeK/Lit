@@ -26,6 +26,7 @@ impl FuncCtx {
                         str_consts.push(s.clone());
                     }
                 }
+                _ => {}
             }
         }
 

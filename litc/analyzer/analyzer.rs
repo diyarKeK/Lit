@@ -47,6 +47,7 @@ impl<'a> Analyzer<'a> {
                 Stmt::Println(expr_id) => {
                     self.infer_type(*expr_id);
                 }
+                _ => {}
             }
         }
     }

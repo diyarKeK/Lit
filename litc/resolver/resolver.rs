@@ -40,6 +40,7 @@ impl<'a> Resolver<'a> {
                 Stmt::Println(expr_id) => {
                     self.resolve_expr(*expr_id);
                 }
+                _ => {}
             }
         }
     }
