@@ -3,3 +3,4 @@ tests/
 .idea/
 .vscode/
 .zed/
+*.bat
