@@ -12,7 +12,7 @@ impl FuncCtx {
         let mut str_consts: Vec<String> = Vec::new();
         let mut var_types = HashMap::new();
 
-        for stmt in &func.body {
+        for stmt in func.body.stmts() {
             match stmt {
                 Stmt::VarDecl(v) => {
                     var_types.insert(v.name.clone(), v._type.clone());
