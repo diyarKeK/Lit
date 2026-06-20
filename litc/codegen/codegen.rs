@@ -13,7 +13,9 @@ pub fn generate(program: Program) -> String {
         ; Lit compiler v1 - generated LLVM IR\n\n\
         declare i32 @putchar(i32)\n\
         declare i32 @puts(i8* nocapture)\n\
-        declare i32 @printf(i8*, ...)\n\n\
+        declare i32 @printf(i8*, ...)\n\
+        declare void @exit(i32)\n\n\
+        @unreachable_msg = private unnamed_addr constant [29 x i8] c\"Entered to unreachable code\\0A\\00\"\n\
         @fmt.u64 = private unnamed_addr constant [6 x i8] c\"%llu\\0A\\00\"\n\
         @fmt.i64 = private unnamed_addr constant [6 x i8] c\"%lld\\0A\\00\"\n\
         @fmt.f64 = private unnamed_addr constant [4 x i8] c\"%g\\0A\\00\"\n\
@@ -48,13 +50,26 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
         match stmt {
             Stmt::VarDecl(v) => emit_vardecl(out, v, expr_arena, &func.name, &ctx, &mut state),
             Stmt::Println(arg) => emit_println(out, expr_arena, *arg, &func.name, &ctx, &mut state),
+            Stmt::Unreachable => emit_unreachable(out, &mut state),
         }
     }
 
     out.push_str("  \
             ret i32 0\n\
-        }\n\n\
+        }\n\
     ");
+}
+
+fn emit_unreachable(out: &mut String, state: &mut EmitState) {
+    let reg = state.next_reg();
+    out.push_str(&format!("  \
+            %r{reg} = getelementptr inbounds [29 x i8], [29 x i8]* @unreachable_msg, i32 0, i32 0\n  \
+            call i32 @puts(i8* %r{reg})\n  \
+            call void @exit(i32 1)\n  \
+            unreachable\n\
+        ",
+        reg = reg,
+    ));
 }
 
 fn emit_vardecl(
@@ -68,13 +83,13 @@ fn emit_vardecl(
     let llvm_type = infer_llvm_type(arena, v.expr_id, ctx.get_var_types());
     let alloca_type = llvm_type.get_alloca_type();
 
-    out.push_str(&format!("  %{name} = alloca {_type}\n", name = v.name, _type = alloca_type));
-
     let val = emit_expr(out, arena, v.expr_id, fn_name, ctx, state).0;
 
-    out.push_str(&format!(
-        "  store {_type} {val}, {_type}* %{name}\n",
-        _type = alloca_type, val = val, name = v.name,
+    out.push_str(&format!("  \
+           %{name} = alloca {_type}\n  \
+           store {_type} {val}, {_type}* %{name}\n\
+        ",
+        name = v.name, _type = alloca_type, val = val,
     ));
 }
 
