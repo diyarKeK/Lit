@@ -246,7 +246,7 @@ fn print_ast(program: &Program) {
     println!("Program:\n");
     for func in &program.funcs {
         println!("  FuncDef: {}():", func.name);
-        for stmt in &func.body {
+        for stmt in func.body.stmts() {
             match stmt {
                 Stmt::VarDecl(v) => {
                     let ty = format!("{:?}", v._type).to_lowercase();

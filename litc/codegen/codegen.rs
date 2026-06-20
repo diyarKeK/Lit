@@ -46,7 +46,7 @@ fn emit_func(out: &mut String, func: &FuncDef, expr_arena: &ExprArena) {
 
     let mut state = EmitState::new();
 
-    for stmt in &func.body {
+    for stmt in func.body.stmts() {
         match stmt {
             Stmt::VarDecl(v) => emit_vardecl(out, v, expr_arena, &func.name, &ctx, &mut state),
             Stmt::Println(arg) => emit_println(out, expr_arena, *arg, &func.name, &ctx, &mut state),

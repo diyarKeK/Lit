@@ -26,7 +26,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_func(&mut self, func: &FuncDef) {
         self.declared.clear();
 
-        for stmt in &func.body {
+        for stmt in func.body.stmts() {
             match stmt {
                 Stmt::VarDecl(v) => {
                     if self.declared.contains_key(&v.name) {

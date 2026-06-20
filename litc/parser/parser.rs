@@ -81,15 +81,17 @@ impl Parser {
         self.expect(TokenKind::RParen);
         self.expect(TokenKind::LBrace);
 
-        let mut body = Vec::new();
+        let mut stmts = Vec::new();
 
         while self.peek().kind != TokenKind::RBrace && !self.is_eof() {
-            body.push(self.parse_stmt());
+            stmts.push(self.parse_stmt());
         }
 
         self.expect(TokenKind::RBrace);
 
-        FuncDef { name, body }
+        let block = Block::new(stmts);
+
+        FuncDef { name, body: block }
     }
 
     fn parse_stmt(&mut self) -> Stmt {

@@ -26,7 +26,7 @@ impl<'a> Resolver<'a> {
     fn resolve_func(&mut self, func: &mut FuncDef) {
         self.declared.clear();
 
-        for stmt in &mut func.body {
+        for stmt in func.body.mut_stmts() {
             match stmt {
                 Stmt::VarDecl(v) => {
                     let (_, expr_type) = self.resolve_expr(v.expr_id);
