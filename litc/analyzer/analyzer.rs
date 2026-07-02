@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ast::*;
-use crate::generate_error;
+use crate::generate_plain_error;
 
 pub fn analyze(program: &Program) {
     let mut analyzer = Analyzer::new(&program.expr_arena);
@@ -30,13 +30,13 @@ impl<'a> Analyzer<'a> {
             match stmt {
                 Stmt::VarDecl(v) => {
                     if self.declared.contains_key(&v.name) {
-                        generate_error!("Variable `{}` is already declared", v.name);
+                        generate_plain_error!("Variable `{}` is already declared", v.name);
                     }
 
                     let expr_type = self.infer_type(v.expr_id);
 
                     if expr_type != v._type {
-                        generate_error!(
+                        generate_plain_error!(
                             "Cannot assign {} value to variable `{}` of type `{}`",
                             expr_type, v.name, v._type
                         );
@@ -67,7 +67,7 @@ impl<'a> Analyzer<'a> {
 
             Expr::Var(name) => {
                 self.declared.get(name).unwrap_or_else(|| {
-                    generate_error!("Variable `{}` is not declared", name)
+                    generate_plain_error!("Variable `{}` is not declared", name)
                 }).clone()
             }
 
@@ -76,7 +76,7 @@ impl<'a> Analyzer<'a> {
                 let right_ty = self.infer_type(*right);
 
                 if left_ty != right_ty {
-                    generate_error!(
+                    generate_plain_error!(
                         "Cannot apply operator `{op}` for types: `{left}` and `{right}`",
                         op = op, left = left_ty, right = right_ty
                     )
@@ -114,7 +114,7 @@ impl<'a> Analyzer<'a> {
                     left_ty
 
                 } else {
-                    generate_error!(
+                    generate_plain_error!(
                         "Cannot apply operator `{op}` for types: `{left}` and `{right}`",
                         op = op, left = left_ty, right = right_ty
                     )
@@ -129,7 +129,7 @@ impl<'a> Analyzer<'a> {
                 } else if let UnaryOp::Not = op && expr_ty.is_logical_type() {
                     expr_ty
                 } else {
-                    generate_error!(
+                    generate_plain_error!(
                         "Cannot apply unary operator `{op}` for type: `{_type}`",
                         op = op, _type = expr_ty
                     )
@@ -140,17 +140,17 @@ impl<'a> Analyzer<'a> {
                 let expr_ty = self.infer_type(*expr);
 
                 if !expr_ty.is_num_type() && expr_ty != Type::Char {
-                    generate_error!("Cannot cast {} to type `{}`", expr_ty, to);
+                    generate_plain_error!("Cannot cast {} to type `{}`", expr_ty, to);
                 }
 
                 if (expr_ty == Type::Char && *to == Type::Float) ||
                     (expr_ty == Type::Float && *to == Type::Char)
                 {
-                    generate_error!("Cannot cast {} to type `{}`", expr_ty, to);
+                    generate_plain_error!("Cannot cast {} to type `{}`", expr_ty, to);
                 }
 
                 if !to.is_num_type() && *to != Type::Char {
-                    generate_error!("Cannot cast anything to type `{}`", to);
+                    generate_plain_error!("Cannot cast anything to type `{}`", to);
                 }
 
                 to.clone()

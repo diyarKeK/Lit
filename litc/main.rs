@@ -89,19 +89,19 @@ impl Options {
                 "-o" => {
                     i += 1;
                     if i >= args.len() {
-                        generate_error!("Expected output path after `-o`");
+                        generate_plain_error!("Expected output path after `-o`");
                     }
 
                     output = Some(PathBuf::from(&args[i]));
                 }
 
                 arg if arg.starts_with("-") => {
-                    generate_error!("Unexpected option: `{}`", arg);
+                    generate_plain_error!("Unexpected option: `{}`", arg);
                 }
 
                 path => {
                     if input.is_some() {
-                        generate_error!("Multiple input files are not supported yet. sorry!");
+                        generate_plain_error!("Multiple input files are not supported yet. sorry!");
                     }
 
                     input = Some(PathBuf::from(path));
@@ -111,7 +111,7 @@ impl Options {
         }
 
         let input = input.unwrap_or_else(|| {
-            generate_error!("Missing input file\nUsage: litc [options] <file.lit>");
+            generate_plain_error!("Missing input file\nUsage: litc [options] <file.lit>");
         });
 
         let output = output.unwrap_or_else(|| input.with_extension("ll"));
@@ -133,11 +133,11 @@ fn main() {
     let options = Options::parse(&argv);
 
     if options.input.extension().and_then(|e| e.to_str()) != Some("lit") {
-        generate_error!("Input file must have `.lit` extension");
+        generate_plain_error!("Input file must have `.lit` extension");
     }
 
     let src = fs::read_to_string(&options.input).unwrap_or_else(|e| {
-        generate_error!("Cannot read `{}` due to: {}", options.input.display(), e);
+        generate_plain_error!("Cannot read `{}` due to: {}", options.input.display(), e);
     });
 
     let now = Instant::now();
@@ -174,7 +174,7 @@ fn main() {
     }
 
     fs::write(&options.output, &ir).unwrap_or_else(|e| {
-        generate_error!("Cannot write into `{}` due to: {}", options.output.display(), e);
+        generate_plain_error!("Cannot write into `{}` due to: {}", options.output.display(), e);
     });
 }
 

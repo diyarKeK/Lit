@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::lexer::Token;
 use crate::lexer::TokenKind;
 use crate::lexer::Span;
-use crate::generate_error;
+use crate::generate_plain_error;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -51,7 +51,7 @@ impl Parser {
         let got = self.advance().kind;
 
         if got != expected {
-            generate_error!("Parse error: expected `{}`, but got `{}`", expected, got);
+            generate_plain_error!("Parse error: expected `{}`, but got `{}`", expected, got);
         }
     }
 
@@ -74,7 +74,7 @@ impl Parser {
         let name = match self.advance().kind {
             TokenKind::Ident(n) => n,
 
-            other => generate_error!("Expected function name after `fun`, but got `{}`", other),
+            other => generate_plain_error!("Expected function name after `fun`, but got `{}`", other),
         };
 
         self.expect(TokenKind::LParen);
@@ -109,7 +109,7 @@ impl Parser {
                 Stmt::Println(self.parse_println())
             },
 
-            other => generate_error!("Parse error: unknown statement starting with `{}`", other),
+            other => generate_plain_error!("Parse error: unknown statement starting with `{}`", other),
         };
 
         stmt
@@ -153,13 +153,13 @@ impl Parser {
             TokenKind::Char => Type::Char,
             TokenKind::Str => Type::Str,
 
-            other => generate_error!("Unknown type: `{}`", other),
+            other => generate_plain_error!("Unknown type: `{}`", other),
         };
 
         let name = match self.advance().kind {
             TokenKind::Ident(name) => name,
 
-            other => generate_error!("Expected variable name after type, but got `{}`", other),
+            other => generate_plain_error!("Expected variable name after type, but got `{}`", other),
         };
 
         self.expect(TokenKind::Assign);
@@ -345,7 +345,7 @@ impl Parser {
                     TokenKind::Char => Type::Char,
                     TokenKind::Str => Type::Str,
 
-                    other => generate_error!("Expected type after keyword `as`, but got: `{}`", other),
+                    other => generate_plain_error!("Expected type after keyword `as`, but got: `{}`", other),
                 };
 
                 let start = self.expr_arena.get(expr).span.start;
@@ -507,7 +507,7 @@ impl Parser {
                 expr
             }
 
-            other => generate_error!("Invalid expression: `{}`", other),
+            other => generate_plain_error!("Invalid expression: `{}`", other),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::generate_error;
+use crate::generate_plain_error;
 use super::token::Token;
 use super::token::TokenKind;
 
@@ -125,7 +125,7 @@ impl Lexer {
                     }
 
                     if c == '\n' {
-                        generate_error!("Unterminated string literal");
+                        generate_plain_error!("Unterminated string literal");
                     }
                     
                     if c == q {
@@ -148,7 +148,7 @@ impl Lexer {
                 }
 
                 if self.peek() != Some(q) {
-                    generate_error!("Unterminated char literal");
+                    generate_plain_error!("Unterminated char literal");
                 }
 
                 self.scroll();
@@ -208,7 +208,7 @@ impl Lexer {
                 }
             }
 
-            other => generate_error!("Unrecognized character: `{}`", other),
+            other => generate_plain_error!("Unrecognized character: `{}`", other),
         };
 
         let span = Span::new(start, self.pos);
@@ -225,7 +225,7 @@ impl Lexer {
             '\\' => '\\',
             '\'' => '\'',
             other => {
-                generate_error!("Cannot resolve: `\\{}` unicode", other)
+                generate_plain_error!("Cannot resolve: `\\{}` unicode", other)
             },
         }
     }

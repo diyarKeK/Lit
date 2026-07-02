@@ -2,7 +2,7 @@
 static mut error_quantity: u32 = 0;
 
 #[macro_export]
-macro_rules! generate_error {
+macro_rules! generate_plain_error {
     ($($arg:tt)*) => {{
         let msg = format!($($arg)*);
 
