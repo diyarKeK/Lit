@@ -1,3 +1,4 @@
+import fmt::Formatter;
 import str::FromStr;
 
 llvm {
@@ -7,6 +8,14 @@ llvm {
     declare void @free(i8*)
 
     @stdin = external global i8*
+}
+
+fun <T : Formatter> println(T msg) {
+    println(msg.fmt());
+}
+
+fun <T : Formatter> print(T msg) {
+    print(msg.fmt());
 }
 
 fun println() {
@@ -52,6 +61,7 @@ fun panic(str msg) {
     exit(1);
 }
 
+#[inline]
 fun exit(i32 code) {
     llvm {
         call void @exit(i32 $code)
