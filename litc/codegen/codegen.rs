@@ -315,6 +315,9 @@ fn llvm_instr_for_operator_by_type(op: &BinaryOp, llvm_type: &LlvmType) -> &'sta
         (BinaryOp::GtEq, LlvmType::Double) => "fcmp oge",
         (BinaryOp::LtEq, LlvmType::Double) => "fcmp ole",
 
+        (BinaryOp::EqEq, LlvmType::I8Ptr) => "icmp eq",
+        (BinaryOp::NotEq, LlvmType::I8Ptr) => "icmp ne",
+
         (BinaryOp::And, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "and",
         (BinaryOp::Or, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "or",
         (BinaryOp::Xor, LlvmType::I64Unsigned | LlvmType::I64Signed | LlvmType::I1) => "xor",
